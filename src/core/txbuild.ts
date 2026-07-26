@@ -86,6 +86,16 @@ export function buildSpend(params: BuildParams): BuiltSpend {
   if (params.feeRateSatPerVb < 1n) {
     throw new BuildError(`fee rate must be at least 1 sat/vB: ${String(params.feeRateSatPerVb)}`);
   }
+  if (params.dustThresholdSats < 0n) {
+    throw new BuildError(
+      `dust threshold must be non-negative: ${String(params.dustThresholdSats)}`,
+    );
+  }
+  if (!Number.isInteger(params.finalityDepth) || params.finalityDepth < 1) {
+    throw new BuildError(
+      `finality depth must be a positive integer: ${String(params.finalityDepth)}`,
+    );
+  }
 
   const spendable = params.utxos
     .filter(
@@ -97,7 +107,9 @@ export function buildSpend(params: BuildParams): BuiltSpend {
       if (a.amountSats !== b.amountSats) {
         return a.amountSats > b.amountSats ? -1 : 1;
       }
-      return outpointKey(a.outpoint) < outpointKey(b.outpoint) ? -1 : 1;
+      const keyA = outpointKey(a.outpoint);
+      const keyB = outpointKey(b.outpoint);
+      return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
     });
   const spendableTotal = spendable.reduce((sum, utxo) => sum + utxo.amountSats, 0n);
 

@@ -77,7 +77,7 @@ describe('FE-01: estimator-unavailable fallback, live', () => {
       utxos,
       reserved: new Set(),
       finalityDepth: N,
-      payAddress: await signing.getNewAddress(),
+      payAddress: await signing.getNewAddress('bech32'),
       paySats: 1_000_000n,
       changeAddress,
       feeRateSatPerVb: chosen.satPerVb,

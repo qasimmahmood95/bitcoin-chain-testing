@@ -67,7 +67,7 @@ describe('TX-02: depth and reservation guards', () => {
       utxos,
       reserved: new Set(),
       finalityDepth: N,
-      payAddress: await signing.getNewAddress(),
+      payAddress: await signing.getNewAddress('bech32'),
       paySats: 1_000_000n,
       changeAddress,
       feeRateSatPerVb: 25n,
@@ -85,7 +85,9 @@ describe('TX-02: depth and reservation guards', () => {
     const reserved = falsifyActive('TX-02') ? new Set<string>() : new Set(first.reservedKeys);
     expect(() => buildSpend({ ...base, reserved })).toThrow(InsufficientSpendableFundsError);
 
-    // One more block settles the larger UTXO; the reservation still holds.
+    // One more block settles the larger UTXO, which largest-first would now
+    // pick regardless; the reservation guard itself is proven by the
+    // must-throw above.
     await mineToWallet(node, signing, 1);
     const utxosLater = (await spendableUtxosAt(signing, [watchedAddress])).filter(relevant);
     const third = buildSpend({

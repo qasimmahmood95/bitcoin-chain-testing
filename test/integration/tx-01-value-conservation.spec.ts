@@ -57,7 +57,7 @@ describe('TX-01: value conservation to the satoshi', () => {
       utxos,
       reserved: new Set(),
       finalityDepth: N,
-      payAddress: await signing.getNewAddress(),
+      payAddress: await signing.getNewAddress('bech32'),
       paySats: PAY_SATS,
       changeAddress,
       feeRateSatPerVb: 25n,

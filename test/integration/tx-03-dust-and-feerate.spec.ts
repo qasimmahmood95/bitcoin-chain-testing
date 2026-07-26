@@ -34,8 +34,9 @@ const DUST = 546n;
 const FUND_SATS = 1_000_000n;
 const FEE_RATE = 10n;
 // One input, one output: 11 + 68 + 31 = 110 vB → 1_100 sats at the target.
-// Pay so the remainder (1_400) exceeds the pay-only fee by a sub-dust 300.
-const PAY_SATS = FUND_SATS - 1_400n;
+// Remainder 1_500: the with-change branch would leave 90 sats of change
+// (sub-dust, and above the branch's own marginal cost) → folded, fee 1_500.
+const PAY_SATS = FUND_SATS - 1_500n;
 
 describe('TX-03: dust folding and feerate tolerance', () => {
   const node = connectRegtest();
@@ -59,13 +60,13 @@ describe('TX-03: dust folding and feerate tolerance', () => {
     );
     expect(utxos).toHaveLength(1);
 
-    // FALSIFY=TX-03: dust threshold zeroed — the 300-sat change is emitted.
+    // FALSIFY=TX-03: dust threshold zeroed — the 90-sat change is emitted.
     const dustThresholdSats = falsifyActive('TX-03') ? 0n : DUST;
     const built = buildSpend({
       utxos,
       reserved: new Set(),
       finalityDepth: N,
-      payAddress: await signing.getNewAddress(),
+      payAddress: await signing.getNewAddress('bech32'),
       paySats: PAY_SATS,
       changeAddress,
       feeRateSatPerVb: FEE_RATE,
@@ -78,7 +79,7 @@ describe('TX-03: dust folding and feerate tolerance', () => {
     }
     expect(built.outputs).toHaveLength(1);
     expect(built.changeSats).toBeNull();
-    expect(built.feeSats).toBe(1_400n);
+    expect(built.feeSats).toBe(1_500n);
 
     const { accept } = await signAndTestAccept(node, signing, built);
     expect(accept?.allowed).toBe(true);

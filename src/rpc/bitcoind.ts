@@ -256,8 +256,9 @@ export class BitcoindRpc {
     return asStringArray(await this.rpc.call('listwallets'), 'listwallets');
   }
 
-  async getNewAddress(): Promise<string> {
-    return asString(await this.rpc.call('getnewaddress'), 'getnewaddress');
+  async getNewAddress(addressType?: 'bech32'): Promise<string> {
+    const params = addressType === undefined ? [] : ['', addressType];
+    return asString(await this.rpc.call('getnewaddress', params), 'getnewaddress');
   }
 
   async generateToAddress(blocks: number, address: string): Promise<string[]> {
