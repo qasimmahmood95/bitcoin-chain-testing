@@ -72,9 +72,11 @@ so a Core version bump that changes the contract fails loudly.
   the competing chain **conflicts** with it (double-spends its input).
   Both flavours are first-class scenarios (RG-01 vs RG-03).
 - **`generateblock` accepts explicitly chosen raw transactions**, which is
-  how a conflicting competing chain is constructed deterministically — a
-  conflicting tx cannot enter via the mempool (`txn-mempool-conflict`), so
-  it is mined directly. [pin: M4]
+  how a conflicting competing chain is constructed deterministically. The
+  mempool is unconditionally full-RBF (Core 29+): a well-funded conflict
+  would *replace* the deposit rather than be refused, so RG-03 uses an
+  underpaying conflict (refused: `insufficient fee, rejecting
+  replacement`) and mines it directly. [pin: M4]
 - **`estimatesmartfee` on regtest returns an error payload** ("Insufficient
   data or no feerate found") — there is no fee history. This is not a
   nuisance to configure away but a **first-class scenario** (FE-01): the

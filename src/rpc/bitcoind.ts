@@ -356,7 +356,8 @@ export class BitcoindRpc {
     removed: { txid: string }[];
   }> {
     const result = asObject(
-      await this.rpc.call('listsinceblock', [blockHash, 1, true]),
+      // [blockhash, target_confirmations, include_watchonly (deprecated), include_removed]
+      await this.rpc.call('listsinceblock', [blockHash, 1, true, true]),
       'listsinceblock',
     );
     const decodeEntry = (entry: JsonValue, context: string) => {

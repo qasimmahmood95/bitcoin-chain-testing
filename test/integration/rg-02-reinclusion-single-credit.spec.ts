@@ -86,9 +86,7 @@ describe('RG-02: re-inclusion credits once from the new height', () => {
     const reincluded = recordNow();
     expect(reincluded.state).toBe('CONFIRMING');
     expect(reincluded.inclusion?.height).toBe(expectedInclusionHeight);
-    expect(confirmationsOf(reincluded, watcher.state.tipHeight)).toBe(
-      watcher.state.tipHeight - newHeight + 1,
-    );
+    expect(confirmationsOf(reincluded, watcher.state.tipHeight)).toBe(1);
 
     // Mine until the NEW inclusion reaches N confirmations.
     await mineToWallet(node, signing, N - confirmationsOf(reincluded, watcher.state.tipHeight));

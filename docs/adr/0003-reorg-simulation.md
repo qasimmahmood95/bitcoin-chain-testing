@@ -29,11 +29,15 @@ chains, reconnect, let consensus pick), or a single node driven with
   mined with `generateblock <addr> '[]'`; re-inclusion (RG-02) is then an
   explicit choice, not an accident.
 - A deposit dies for good only when the competing chain **spends its
-  input**. A conflicting transaction cannot enter through the mempool —
-  the node refuses it with `txn-mempool-conflict` (pinned in RG-03) — so
-  it is mined **directly** via `generateblock` with the raw transaction.
-  That asymmetry (mempool refuses what a block may carry) is exactly the
-  custody-relevant attack shape.
+  input**. Since Core 29 the mempool is unconditionally full-RBF, so a
+  *well-funded* conflict would simply replace the deposit — transaction
+  replacement, not the mined-double-spend attack RG-03 pins. The spec
+  therefore builds an **underpaying** conflict: the mempool refuses it
+  with `insufficient fee, rejecting replacement` (pinned in RG-03), and
+  it is mined **directly** via `generateblock` with the raw transaction —
+  blocks are not bound by mempool policy. That asymmetry (a block may
+  carry what the mempool refuses) is exactly the custody-relevant attack
+  shape.
 - `reconsiderblock` re-validates an abandoned branch, giving A→B→A
   flapping (RG-05) as three deterministic calls: reconsider A, invalidate
   B's first block, done.
@@ -62,3 +66,6 @@ relay policy divergence) is a non-goal recorded in CLAUDE.md.
   that flap must clean up their own invalidations, or later specs would
   inherit a poisoned chain — each RG spec ends on the active chain it
   asserted.
+- Suite-wide invariant that keeps one shared node safe under all this
+  surgery: no spec ever asserts global mempool, height, or wallet state —
+  only views filtered to its own txids and watched addresses.

@@ -54,7 +54,6 @@ describe('RG-01: reorged-out deposit un-credits', () => {
   it('reverts to SEEN_MEMPOOL with zero credit events, in both observers', async () => {
     const watcher = await ChainWatcher.create(node, new Set([address]), N);
     const allEvents: TrackerEvent[] = [];
-    const baseHash = await node.getBestBlockHash();
 
     const txid = await signing.sendToAddress(address, DEPOSIT_SATS, 25);
     allEvents.push(...(await watcher.poll()));
@@ -67,6 +66,11 @@ describe('RG-01: reorged-out deposit un-credits', () => {
     if (included?.inclusion == null) {
       return;
     }
+
+    // listsinceblock's `removed` walks the DETACHED branch from the given
+    // block down to the fork — so the pin needs the pre-reorg tip, not an
+    // on-chain ancestor.
+    const preReorgTip = await node.getBestBlockHash();
 
     // FALSIFY=RG-01: the reorg never happens — the assertions below must
     // notice that nothing was un-credited.
@@ -94,7 +98,7 @@ describe('RG-01: reorged-out deposit un-credits', () => {
 
     // Wallet oracle [pin]: the tx is in `removed` (its block disconnected)
     // AND back in `transactions` at 0 confirmations (mempool resurrection).
-    const since = await watch.listSinceBlock(baseHash);
+    const since = await watch.listSinceBlock(preReorgTip);
     expect(since.removed.some((t) => t.txid === txid)).toBe(true);
     const resurfaced = since.transactions.filter((t) => t.txid === txid);
     expect(resurfaced.length).toBeGreaterThan(0);

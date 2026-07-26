@@ -3,9 +3,11 @@
  * way a deposit dies for good.
  *
  * Chain events driven: deposit; mine 2; invalidate the containing block
- *   (deposit resurrects to the mempool); pin that broadcasting the
- *   conflicting spend is refused by the mempool (txn-mempool-conflict)
- *   [pin]; mine it directly via generateblock-with-raw-tx; mine 2 more.
+ *   (deposit resurrects to the mempool); pin that the underpaying
+ *   conflicting spend is refused by full-RBF mempool policy
+ *   ("insufficient fee, rejecting replacement") [pin]; mine it directly
+ *   via generateblock-with-raw-tx — blocks are not bound by mempool
+ *   policy; mine 2 more.
  * Invariant: the tracker marks the deposit CONFLICTED — terminal, never
  *   credited (zero credit events); the wallet oracle reports NEGATIVE
  *   confirmations equal to minus the conflicting tx's depth [pin], and
@@ -34,7 +36,10 @@ import { watchOnlyFixture } from '../support/watch-setup.js';
 
 const N = 6;
 const DEPOSIT_SATS = 4_040_404n;
-const CONFLICT_FEE_SATS = 10_000n;
+// Deliberately below the deposit's absolute fee: with full-RBF (Core 29+)
+// a well-funded conflict would simply REPLACE the deposit in the mempool,
+// which is a different phenomenon than the mined-double-spend RG-03 pins.
+const CONFLICT_FEE_SATS = 1_000n;
 const ADDRESS_INDEX = 22;
 
 describe('RG-03: conflicting spend conflicts the deposit for good', () => {
@@ -54,7 +59,6 @@ describe('RG-03: conflicting spend conflicts the deposit for good', () => {
   it('CONFLICTED terminal, never credited; wallet shows negative confirmations', async () => {
     const watcher = await ChainWatcher.create(node, new Set([address]), N);
     const allEvents: TrackerEvent[] = [];
-    const baseHash = await node.getBestBlockHash();
 
     const txid = await signing.sendToAddress(address, DEPOSIT_SATS, 25);
     allEvents.push(...(await watcher.poll()));
@@ -74,6 +78,9 @@ describe('RG-03: conflicting spend conflicts the deposit for good', () => {
     if (disputed === undefined) {
       return;
     }
+    // Determinism guard: the disputed outpoint must be chain-confirmed, or
+    // generateblock would reject the conflicting block outright.
+    expect((await signing.getTransaction(disputed.txid)).confirmations).toBeGreaterThanOrEqual(1);
     const parentOutputs = await node.getRawTransactionOutputs(disputed.txid);
     const disputedValue = parentOutputs.find((o) => o.vout === disputed.vout)?.valueSats;
     expect(disputedValue).toBeDefined();
@@ -87,9 +94,11 @@ describe('RG-03: conflicting spend conflicts the deposit for good', () => {
     expect(conflict.complete).toBe(true);
 
     // Reorg the deposit back into the mempool…
+    const preReorgTip = await node.getBestBlockHash();
     await node.invalidateBlock(included.inclusion.blockHash);
 
-    // [pin] …where the conflicting spend cannot follow it in:
+    // [pin] …where the underpaying conflict cannot follow it in: full-RBF
+    // evaluates it as a replacement and rejects it on fees.
     let refused: unknown;
     try {
       await node.sendRawTransaction(conflict.hex);
@@ -97,7 +106,7 @@ describe('RG-03: conflicting spend conflicts the deposit for good', () => {
       refused = error;
     }
     expect(refused).toBeInstanceOf(RpcError);
-    expect((refused as RpcError).rpcMessage).toContain('txn-mempool-conflict');
+    expect((refused as RpcError).rpcMessage).toContain('insufficient fee, rejecting replacement');
 
     // So it is mined directly — the competing chain carries the conflict.
     await node.generateBlock(await signing.getNewAddress(), [conflict.hex]);
@@ -117,9 +126,11 @@ describe('RG-03: conflicting spend conflicts the deposit for good', () => {
     expect(record.creditedAtHeight).toBeNull();
     expect(allEvents.filter((e) => e.kind === 'credited')).toHaveLength(0);
 
-    // Wallet oracle [pin]: negative confirmations = −(conflicting tx depth).
+    // Wallet oracle [pin]: negative confirmations = −(conflicting tx depth),
+    // and listsinceblock from the DETACHED pre-reorg tip walks the orphaned
+    // branch into `removed`.
     expect((await watch.getTransaction(txid)).confirmations).toBe(-3);
-    const since = await watch.listSinceBlock(baseHash);
+    const since = await watch.listSinceBlock(preReorgTip);
     expect(since.removed.some((t) => t.txid === txid)).toBe(true);
   });
 });
