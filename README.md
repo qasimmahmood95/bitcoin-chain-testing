@@ -7,7 +7,7 @@ reorgs, fee-estimator degradation, rebroadcast ambiguity. On regtest,
 block production is driven by the tests, so a reorg is not a rare event to
 wait for but a three-RPC-call fixture.
 
-**Status: M1 — harness scaffolding.** The plan and full scenario table:
+**Status: M2 — derivation & watch-only descriptors.** The plan and full scenario table:
 [docs/milestone-plan.md](docs/milestone-plan.md) ·
 [docs/integration-scenarios.md](docs/integration-scenarios.md) ·
 ADRs in [docs/adr/](docs/adr/).
@@ -23,6 +23,7 @@ npm install
 npm run stack:up          # bitcoind regtest (pinned image), health-gated
 npm run test:unit         # pure library lane — no Docker needed
 npm run test:integration  # scenario suite against the regtest node
+npm run falsify           # every documented sabotage lever must turn a test red
 npm run stack:down        # clean slate — chain state dies with the container
 ```
 
