@@ -88,25 +88,28 @@ describe('DR-03: watch-only deposit detection', () => {
     const txid = await signing.sendToAddress(address, DEPOSIT_SATS, 25);
 
     // Same node, so the mempool sighting is immediate; the budget is a
-    // small explicit cushion, not a synchronization crutch.
+    // small explicit cushion, not a synchronization crutch. Filtering by
+    // txid keeps re-runs against a warm stack (prior deposits at the same
+    // derived address) out of the assertions.
     const unconfirmed = await pollUntil(
       'watch-only 0-conf sighting',
       { attempts: 5, delayMs: 200 },
       async () => {
-        const utxos = await watch.listUnspent(0, [address]);
+        const utxos = (await watch.listUnspent(0, [address])).filter((u) => u.txid === txid);
         return utxos.length > 0 ? utxos : undefined;
       },
     );
     expect(unconfirmed).toHaveLength(1);
-    expect(unconfirmed[0]?.txid).toBe(txid);
     expect(unconfirmed[0]?.amountSats).toBe(DEPOSIT_SATS);
     expect(unconfirmed[0]?.confirmations).toBe(0);
+    const outpointVout = unconfirmed[0]?.vout;
+    expect(outpointVout).toBeDefined();
 
     await mineToWallet(node, signing, 1);
 
-    const confirmed = await watch.listUnspent(1, [address]);
+    const confirmed = (await watch.listUnspent(1, [address])).filter((u) => u.txid === txid);
     expect(confirmed).toHaveLength(1);
-    expect(confirmed[0]?.txid).toBe(txid);
+    expect(confirmed[0]?.vout).toBe(outpointVout);
     expect(confirmed[0]?.amountSats).toBe(DEPOSIT_SATS);
     expect(confirmed[0]?.confirmations).toBe(1);
 

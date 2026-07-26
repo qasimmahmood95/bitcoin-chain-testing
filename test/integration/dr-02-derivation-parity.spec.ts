@@ -62,9 +62,16 @@ describe('DR-02: derivation parity against deriveaddresses', () => {
   });
 
   it('node refuses a mainnet-encoded key in a descriptor, like the library does', async () => {
+    // Canonical xpub form: legal descriptor syntax on mainnet, so the
+    // regtest rejection pinned here is genuinely network-based (a raw
+    // SLIP-132 zpub would be rejected on every network as bad encoding).
+    const mainnetXpub = parseAccountPublicKey(BIP84_MAINNET_ZPUB, {
+      network: 'mainnet',
+      scriptType: 'p2wpkh',
+    }).canonicalKey;
     let caught: unknown;
     try {
-      await node.getDescriptorInfo(`wpkh(${BIP84_MAINNET_ZPUB}/0/*)`);
+      await node.getDescriptorInfo(`wpkh(${mainnetXpub}/0/*)`);
     } catch (error) {
       caught = error;
     }

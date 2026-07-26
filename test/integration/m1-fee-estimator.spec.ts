@@ -8,9 +8,8 @@
  *   "Insufficient data or no feerate found".
  * Custody risk: fee logic that assumes the estimator always answers —
  *   withdrawal outage the moment it degrades (a live-incident classic).
- * Falsification lever: FALSIFY=FEE-PIN additionally asserts a feerate is
- *   present — red on every run, proving the absence assertions consult the
- *   live estimator.
+ * Falsification lever: FALSIFY=FEE-PIN flips the pinned error string —
+ *   red exactly because the live estimator answers with the real message.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -22,11 +21,13 @@ describe('M1 characterization: estimatesmartfee on regtest', () => {
 
   it('has no feerate and reports insufficient data', async () => {
     const estimate = await node.estimateSmartFee(6);
-    if (falsifyActive('FEE-PIN')) {
-      // FALSIFY=FEE-PIN: demand the feerate the regtest estimator can never give.
-      expect(estimate.feeRateSatsPerKvB).toBeDefined();
-    }
     expect(estimate.feeRateSatsPerKvB).toBeUndefined();
-    expect(estimate.errors).toEqual(['Insufficient data or no feerate found']);
+    // FALSIFY=FEE-PIN flips the pinned error string — red iff the live
+    // estimator actually answered with the real message, proving the pin
+    // consults the node rather than restating itself.
+    const expectedErrors = falsifyActive('FEE-PIN')
+      ? ['Insufficient data or no feerate found (falsified pin)']
+      : ['Insufficient data or no feerate found'];
+    expect(estimate.errors).toEqual(expectedErrors);
   });
 });

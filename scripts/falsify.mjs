@@ -46,7 +46,7 @@ const LEVERS = [
     id: 'FEE-PIN',
     project: 'integration',
     spec: 'test/integration/m1-fee-estimator.spec.ts',
-    sabotage: 'asserts the regtest estimator returned a feerate',
+    sabotage: 'pinned estimator error string flipped',
   },
   // ── M2 ───────────────────────────────────────────────────────────────
   {

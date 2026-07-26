@@ -89,6 +89,17 @@ describe('DR-04: network and key-material guards', () => {
     ).toThrow(PrivateKeyMaterialError);
   });
 
+  it('rejects a non-account-level key (published BIP84 depth-0 rootpub)', () => {
+    const BIP84_ROOTPUB =
+      'zpub6jftahH18ngZxLmXaKw3GSZzZsszmt9WqedkyZdezFtWRFBZqsQH5hyUmb4pCEeZGmVfQuP5bedXTB8is6fTv19U1GQRyQUKQGUTzyHACMF';
+    expect(() =>
+      parseAccountPublicKey(BIP84_ROOTPUB, { network: 'mainnet', scriptType: 'p2wpkh' }),
+    ).toThrow(AccountKeyError);
+    expect(() =>
+      parseAccountPublicKey(BIP84_ROOTPUB, { network: 'mainnet', scriptType: 'p2wpkh' }),
+    ).toThrow(/depth/);
+  });
+
   it('rejects malformed key material with a typed error', () => {
     for (const bad of ['', 'not-a-key', 'xpub-truncated', bs58check.encode(Buffer.alloc(10))]) {
       expect(() =>

@@ -182,7 +182,9 @@ export function accountDescriptor(account: WatchAccount, branch: Branch): string
 /**
  * Guard against cross-network address confusion (DR-04): a bech32 address
  * is accepted only when its HRP matches the configured network — never
- * silently re-encoded.
+ * silently re-encoded. Scope: HRP-prefix check over the bech32 addresses
+ * this library derives; it neither validates checksums nor accepts
+ * legacy/P2SH encodings (the library never produces either).
  */
 export function assertAddressNetwork(address: string, network: Network): void {
   const lower = address.toLowerCase();
