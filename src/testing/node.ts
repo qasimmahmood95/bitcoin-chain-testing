@@ -73,6 +73,37 @@ export async function openSigningWallet(node: BitcoindRpc): Promise<BitcoindRpc>
   return node.forWallet(SIGNING_WALLET);
 }
 
+export const WATCH_WALLET = 'bct-watch';
+
+/** Watch-only wallet: descriptors only, private keys disabled at creation (DR-03). */
+export async function openWatchOnlyWallet(node: BitcoindRpc): Promise<BitcoindRpc> {
+  const loaded = await node.listWallets();
+  if (!loaded.includes(WATCH_WALLET)) {
+    try {
+      await node.createWallet(WATCH_WALLET, { disablePrivateKeys: true });
+    } catch (error) {
+      if (error instanceof RpcError && error.code === WALLET_EXISTS_CODE) {
+        await node.loadWallet(WATCH_WALLET);
+      } else {
+        throw error;
+      }
+    }
+  }
+  return node.forWallet(WATCH_WALLET);
+}
+
+/** Funds the signing wallet with spendable (mature) coins when it has none. */
+export async function ensureSpendableFunds(
+  node: BitcoindRpc,
+  wallet: BitcoindRpc,
+  minSats: bigint,
+): Promise<void> {
+  const { trustedSats } = await wallet.getBalances();
+  if (trustedSats < minSats) {
+    await mineToWallet(node, wallet, COINBASE_MATURITY + 1);
+  }
+}
+
 /** Mines `blocks` new blocks paying a fresh address of `wallet`; returns the block hashes. */
 export async function mineToWallet(
   node: BitcoindRpc,
