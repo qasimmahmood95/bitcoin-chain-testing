@@ -212,14 +212,14 @@ function applyDisconnect(
         `disconnect hash ${blockHash} does not match inclusion ${record.inclusion.blockHash} at height ${String(height)}`,
       );
     }
-    if (record.state === 'CREDITED') {
-      // Sticky credit: alert, never a silent clawback (ADR-0002).
-      records.set(key, { ...record, inclusion: null });
-      events.push({ kind: 'finality-violation', outpoint: record.outpoint, atHeight: height });
-    } else {
-      // Mempool resurrection default: demoted, not gone.
-      records.set(key, { ...record, inclusion: null, state: 'SEEN_MEMPOOL' });
+    if (record.state !== 'CREDITED') {
+      // Nothing has been counted for this deposit yet, so a disconnect has
+      // no accounting to revert — it stays pending and keeps confirming.
+      continue;
     }
+    // Sticky credit: alert, never a silent clawback (ADR-0002).
+    records.set(key, { ...record, inclusion: null });
+    events.push({ kind: 'finality-violation', outpoint: record.outpoint, atHeight: height });
   }
   return { state: { ...state, tipHeight: height - 1, records }, events };
 }
