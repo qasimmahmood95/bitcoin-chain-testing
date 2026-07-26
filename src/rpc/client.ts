@@ -84,7 +84,10 @@ export class JsonRpcClient {
     return new JsonRpcClient(this.connection, `/wallet/${walletName}`);
   }
 
-  async call(method: string, params: readonly unknown[] = []): Promise<JsonValue> {
+  async call(
+    method: string,
+    params: readonly unknown[] | Readonly<Record<string, unknown>> = [],
+  ): Promise<JsonValue> {
     const { url, username, password, timeoutMs } = this.connection;
     const authorization = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
     const signal = AbortSignal.timeout(timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS);

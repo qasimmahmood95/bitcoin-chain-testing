@@ -1,6 +1,7 @@
 # lint → typecheck → unit (no services) → integration (compose --wait,
-# health-gated, teardown) → gitleaks (required always). Falsify joins the
-# chain at M2. Budget for the whole pipeline: ≤ ~5 minutes.
+# health-gated, teardown) → falsify (every documented lever must go red —
+# required from M2 on) → gitleaks (required always). Budget for the whole
+# pipeline: ≤ ~5 minutes.
 name: ci
 
 on:
@@ -63,6 +64,24 @@ jobs:
       - name: node logs (on failure)
         if: failure()
         run: docker compose logs bitcoind
+      - name: stack down
+        if: always()
+        run: npm run stack:down
+
+  falsify:
+    needs: integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: stack up (health-gated)
+        run: npm run stack:up
+      - name: every falsification lever must go red
+        run: npm run falsify
       - name: stack down
         if: always()
         run: npm run stack:down
