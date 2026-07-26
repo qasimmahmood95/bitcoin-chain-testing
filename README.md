@@ -152,7 +152,7 @@ to `core.hooksPath` by `npm install`).
 npm install
 npm run stack:up          # bitcoind regtest (pinned image), health-gated
 npm run test:unit         # pure library lane — no Docker needed
-npm run test:integration  # 22 scenarios against the regtest node
+npm run test:integration  # the full scenario suite against the regtest node
 npm run falsify           # every documented lever must turn a test red
 npm run stack:down        # clean slate — chain state dies with the container
 ```
