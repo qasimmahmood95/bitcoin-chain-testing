@@ -59,13 +59,33 @@ export interface TransactionOutput {
   readonly valueSats: bigint;
 }
 
+export interface TransactionInput {
+  readonly txid: string;
+  readonly vout: number;
+}
+
 export interface BlockWithTransactions {
   readonly hash: string;
   readonly height: number;
   readonly transactions: readonly {
     readonly txid: string;
+    readonly inputs: readonly TransactionInput[];
     readonly outputs: readonly TransactionOutput[];
   }[];
+}
+
+/** Coinbase vins carry no txid and are skipped — they can conflict with nothing. */
+function decodeTransactionInputs(vins: readonly JsonValue[], context: string): TransactionInput[] {
+  const inputs: TransactionInput[] = [];
+  vins.forEach((entry, index) => {
+    const inContext = `${context}.vin[${String(index)}]`;
+    const record = asObject(entry, inContext);
+    const txid = asOptional(record['txid'], asString, `${inContext}.txid`);
+    if (txid !== undefined) {
+      inputs.push({ txid, vout: asInteger(record['vout'], `${inContext}.vout`) });
+    }
+  });
+  return inputs;
 }
 
 function decodeTransactionOutputs(
@@ -266,6 +286,7 @@ export class BitcoindRpc {
       const record = asObject(entry, context);
       return {
         txid: asString(record['txid'], `${context}.txid`),
+        inputs: decodeTransactionInputs(asArray(record['vin'], `${context}.vin`), context),
         outputs: decodeTransactionOutputs(asArray(record['vout'], `${context}.vout`), context),
       };
     });
@@ -286,6 +307,75 @@ export class BitcoindRpc {
       asArray(tx['vout'], 'getrawtransaction.vout'),
       'getrawtransaction',
     );
+  }
+
+  /** Decoded inputs of a transaction — the watcher's conflict index feed (RG-03). */
+  async getRawTransactionInputs(txid: string): Promise<TransactionInput[]> {
+    const tx = asObject(
+      await this.rpc.call('getrawtransaction', [txid, true]),
+      'getrawtransaction',
+    );
+    return decodeTransactionInputs(
+      asArray(tx['vin'], 'getrawtransaction.vin'),
+      'getrawtransaction',
+    );
+  }
+
+  /** Deterministic single-node reorg primitives (ADR-0003). */
+  async invalidateBlock(blockHash: string): Promise<void> {
+    await this.rpc.call('invalidateblock', [blockHash]);
+  }
+
+  async reconsiderBlock(blockHash: string): Promise<void> {
+    await this.rpc.call('reconsiderblock', [blockHash]);
+  }
+
+  /**
+   * Mines a block with exactly the given raw transactions — how a
+   * conflicting competing chain is built, since a conflicting tx cannot
+   * enter via the mempool (RG-03).
+   */
+  async generateBlock(outputAddress: string, rawTxs: readonly string[]): Promise<string> {
+    const result = asObject(
+      await this.rpc.call('generateblock', [outputAddress, rawTxs]),
+      'generateblock',
+    );
+    return asString(result['hash'], 'generateblock.hash');
+  }
+
+  /** Wallet view of a single transaction; confirmations go NEGATIVE on conflict. [pin M4] */
+  async getTransaction(txid: string): Promise<{ confirmations: number }> {
+    const tx = asObject(await this.rpc.call('gettransaction', [txid]), 'gettransaction');
+    return { confirmations: asInteger(tx['confirmations'], 'gettransaction.confirmations') };
+  }
+
+  /** Wallet reorg-observation primitive: include_removed surfaces transactions
+   *  from disconnected blocks. [pin M4] */
+  async listSinceBlock(blockHash: string): Promise<{
+    transactions: { txid: string; confirmations: number }[];
+    removed: { txid: string }[];
+  }> {
+    const result = asObject(
+      // [blockhash, target_confirmations, include_watchonly (deprecated), include_removed]
+      await this.rpc.call('listsinceblock', [blockHash, 1, true, true]),
+      'listsinceblock',
+    );
+    const decodeEntry = (entry: JsonValue, context: string) => {
+      const record = asObject(entry, context);
+      return {
+        txid: asString(record['txid'], `${context}.txid`),
+        confirmations: asInteger(record['confirmations'], `${context}.confirmations`),
+      };
+    };
+    return {
+      transactions: asArray(result['transactions'], 'listsinceblock.transactions').map((e, i) =>
+        decodeEntry(e, `listsinceblock.transactions[${String(i)}]`),
+      ),
+      removed: asArray(result['removed'], 'listsinceblock.removed').map((e, i) => {
+        const record = asObject(e, `listsinceblock.removed[${String(i)}]`);
+        return { txid: asString(record['txid'], `listsinceblock.removed[${String(i)}].txid`) };
+      }),
+    };
   }
 
   /** One transaction paying several addresses (CF-05), explicit sat/vB feerate. */

@@ -37,8 +37,9 @@ Two reorg flavours, deliberately distinct: after `invalidateblock`, a
 disconnected block's transactions **re-enter the mempool** if still valid
 (RG-01 — the deposit is demoted, not gone); the deposit only vanishes for
 good when the competing chain **double-spends its input** (RG-03, mined via
-`generateblock` with a crafted raw tx, since conflicts can't enter via the
-mempool).
+`generateblock` with a crafted raw tx — under full-RBF a well-funded
+conflict would *replace* the deposit instead, and an underpaying one is
+refused with `insufficient fee, rejecting replacement`).
 
 | ID | Scenario | Invariant asserted | Custody risk it maps to | Falsification lever |
 |---|---|---|---|---|

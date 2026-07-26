@@ -160,6 +160,29 @@ describe('confirmation state machine', () => {
     ]);
   });
 
+  it('a conflict against a CREDITED record alerts and never claws back', () => {
+    const credited = run(newTracker(), [
+      connectAt(START_HEIGHT + 1, [DEPOSIT]),
+      ...emptyConnects(START_HEIGHT + 2, N - 1),
+    ]);
+    expect(recordOf(credited.state).state).toBe('CREDITED');
+
+    const conflicted = run(credited.state, [
+      { kind: 'conflict', outpoint: DEPOSIT.outpoint, byTxid: 'c'.repeat(64) },
+    ]);
+    const record = recordOf(conflicted.state);
+    expect(record.state).toBe('CREDITED'); // sticky — never a silent clawback
+    expect(record.creditedAtHeight).toBe(START_HEIGHT + N);
+    expect(record.amountSats).toBe(DEPOSIT.amountSats);
+    expect(conflicted.events).toEqual([
+      {
+        kind: 'finality-violation',
+        outpoint: DEPOSIT.outpoint,
+        atHeight: conflicted.state.tipHeight,
+      },
+    ]);
+  });
+
   it('CONFLICTED is terminal and never credited', () => {
     const conflicted = run(newTracker(), [
       { kind: 'mempool', deposit: DEPOSIT },

@@ -40,6 +40,11 @@ export interface WatcherCheckpoint {
   readonly tracker: TrackerSnapshot;
   readonly processedChain: readonly { readonly height: number; readonly hash: string }[];
   readonly seenMempoolTxids: readonly string[];
+  /** Inputs of every watched deposit transaction — the conflict index (RG-03). */
+  readonly depositInputs: readonly {
+    readonly txid: string;
+    readonly inputs: readonly { readonly txid: string; readonly vout: number }[];
+  }[];
 }
 
 /** Processed-chain entries kept below the tip (bounds checkpoint size). */
@@ -56,6 +61,10 @@ export class ChainWatcher {
   private trackerState: TrackerState;
   private readonly processed = new Map<number, string>();
   private readonly seenMempoolTxids = new Set<string>();
+  /** deposit txid → inputs it spends. */
+  private readonly depositInputs = new Map<string, readonly { txid: string; vout: number }[]>();
+  /** spent-input key → deposit txids spending it (conflict detection). */
+  private readonly inputSpenders = new Map<string, Set<string>>();
 
   private constructor(
     private readonly node: BitcoindRpc,
@@ -94,6 +103,9 @@ export class ChainWatcher {
     for (const txid of checkpoint.seenMempoolTxids) {
       watcher.seenMempoolTxids.add(txid);
     }
+    for (const { txid, inputs } of checkpoint.depositInputs) {
+      watcher.indexDepositInputs(txid, inputs);
+    }
     return watcher;
   }
 
@@ -108,7 +120,49 @@ export class ChainWatcher {
         .map(([height, hash]) => ({ height, hash }))
         .sort((a, b) => a.height - b.height),
       seenMempoolTxids: [...this.seenMempoolTxids].sort(),
+      depositInputs: [...this.depositInputs.entries()]
+        .map(([txid, inputs]) => ({ txid, inputs }))
+        .sort((a, b) => a.txid.localeCompare(b.txid)),
     };
+  }
+
+  private static inputKey(input: { txid: string; vout: number }): string {
+    return `${input.txid}:${String(input.vout)}`;
+  }
+
+  private indexDepositInputs(
+    depositTxid: string,
+    inputs: readonly { txid: string; vout: number }[],
+  ): void {
+    if (this.depositInputs.has(depositTxid)) {
+      return;
+    }
+    this.depositInputs.set(depositTxid, inputs);
+    for (const input of inputs) {
+      const key = ChainWatcher.inputKey(input);
+      const spenders = this.inputSpenders.get(key) ?? new Set<string>();
+      spenders.add(depositTxid);
+      this.inputSpenders.set(key, spenders);
+    }
+  }
+
+  /** Deposit txids whose inputs `tx` double-spends (excluding itself). */
+  private conflictingDeposits(
+    txid: string,
+    inputs: readonly { readonly txid: string; readonly vout: number }[],
+  ): Set<string> {
+    const conflicted = new Set<string>();
+    for (const input of inputs) {
+      const spenders = this.inputSpenders.get(ChainWatcher.inputKey(input));
+      if (spenders !== undefined) {
+        for (const spender of spenders) {
+          if (spender !== txid) {
+            conflicted.add(spender);
+          }
+        }
+      }
+    }
+    return conflicted;
   }
 
   /** One bounded polling pass; returns the tracker events it caused. */
@@ -132,7 +186,11 @@ export class ChainWatcher {
         continue;
       }
       this.seenMempoolTxids.add(txid);
-      for (const deposit of await this.depositsOfTransaction(txid)) {
+      const deposits = await this.depositsOfTransaction(txid);
+      if (deposits.length > 0) {
+        this.indexDepositInputs(txid, await this.node.getRawTransactionInputs(txid));
+      }
+      for (const deposit of deposits) {
         this.apply({ kind: 'mempool', deposit }, into);
       }
     }
@@ -196,13 +254,16 @@ export class ChainWatcher {
       this.processed.delete(height);
     }
 
-    // Connect the new chain, ascending.
+    // Connect the new chain, ascending; conflicts surface after each block.
     for (const { height, hash } of [...newChain].reverse()) {
       const block = await this.node.getBlockWithTransactions(hash);
       const deposits: WatchedDeposit[] = [];
+      const conflicts: { depositTxid: string; byTxid: string }[] = [];
       for (const transaction of block.transactions) {
+        let carriesDeposit = false;
         for (const output of transaction.outputs) {
           if (output.address !== null && this.watched.has(output.address)) {
+            carriesDeposit = true;
             deposits.push({
               outpoint: { txid: transaction.txid, vout: output.vout },
               address: output.address,
@@ -210,8 +271,26 @@ export class ChainWatcher {
             });
           }
         }
+        if (carriesDeposit) {
+          this.indexDepositInputs(transaction.txid, transaction.inputs);
+        }
+        for (const depositTxid of this.conflictingDeposits(transaction.txid, transaction.inputs)) {
+          conflicts.push({ depositTxid, byTxid: transaction.txid });
+        }
       }
       this.apply({ kind: 'connect', height, blockHash: hash, deposits }, into);
+      // A mined double-spend of a watched deposit's input is the one way a
+      // deposit dies for good (RG-03) — surfaced after the block connects.
+      for (const conflict of conflicts) {
+        for (const record of this.trackerState.records.values()) {
+          if (record.outpoint.txid === conflict.depositTxid) {
+            this.apply(
+              { kind: 'conflict', outpoint: record.outpoint, byTxid: conflict.byTxid },
+              into,
+            );
+          }
+        }
+      }
       this.processed.set(height, hash);
       this.processed.delete(height - PROCESSED_RETENTION);
     }

@@ -110,6 +110,37 @@ const LEVERS = [
     spec: 'test/integration/cf-05-outpoint-aggregation.spec.ts',
     sabotage: 'records keyed by txid instead of outpoint',
   },
+  // ── M4 ───────────────────────────────────────────────────────────────
+  {
+    id: 'RG-01',
+    project: 'integration',
+    spec: 'test/integration/rg-01-reorged-out-uncredits.spec.ts',
+    sabotage: 'the reorg is suppressed — nothing to un-credit',
+  },
+  {
+    id: 'RG-02',
+    project: 'integration',
+    spec: 'test/integration/rg-02-reinclusion-single-credit.spec.ts',
+    sabotage: 'stale pre-reorg inclusion height demanded',
+  },
+  {
+    id: 'RG-03',
+    project: 'integration',
+    spec: 'test/integration/rg-03-conflicting-spend.spec.ts',
+    sabotage: 'conflicted viewed as still-pending',
+  },
+  {
+    id: 'RG-04',
+    project: 'integration',
+    spec: 'test/integration/rg-04-finality-violation.spec.ts',
+    sabotage: 'finality-violation alert dropped',
+  },
+  {
+    id: 'RG-05',
+    project: 'integration',
+    spec: 'test/integration/rg-05-chain-flapping.spec.ts',
+    sabotage: 'window replayed without checkpoint dedup',
+  },
 ];
 
 const requested = process.argv.slice(2);

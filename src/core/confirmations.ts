@@ -153,8 +153,8 @@ function applyConnect(
     const key = outpointKey(deposit.outpoint);
     const existing = records.get(key);
     if (existing?.state === 'CONFLICTED') {
-      // Terminal: a conflicted outpoint stays conflicted (M4 revisits the
-      // conflict-reorged-away nuance; until then, loudly absorbing).
+      // Terminal by policy (ADR-0002): once conflicted, a re-appearing
+      // outpoint is absorbed — never silently resurrected into credit.
       continue;
     }
     if (existing === undefined) {
