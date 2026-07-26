@@ -14,7 +14,7 @@ tests, so a reorg is not an event to wait for but a three-RPC-call fixture:
 repo drives the chain explicitly and asserts against a node that is
 genuinely mining, genuinely reorging, and genuinely rejecting.
 
-**22 integration scenarios · 53 unit tests · 30 falsification levers · 3
+**22 integration scenarios · 53 unit tests · 31 falsification levers · 3
 planted defects with red CI.** Bitcoin Core enters only as a pinned Docker
 image ([`31.1@sha256:da25ce…`](docker-compose.yml)) and is never patched,
 forked, or mocked.
@@ -102,7 +102,7 @@ CF-02     RED (good)  · credit threshold lowered to N−1
 TX-03     RED (good)  · dust threshold zeroed — sub-dust change emitted
 BR-01     RED (good)  · a record annotation per broadcast attempt
 …
-all 30 levers went red — no vacuous passes.
+all 31 levers went red — no vacuous passes.
 ```
 
 A lever that fails to turn its spec red is reported as **vacuous** and the
@@ -167,7 +167,7 @@ docs/adr/     decision records
 |---|---|---|
 | **DR** | 4 | Address derivation from **account-level public keys** only; parity against the node's own `deriveaddresses`; watch-only descriptor import; cross-network rejection |
 | **CF** | 5 | Confirmation depth: pending at 0-conf, credit exactly at `N` (asserted as a triplet `N−1 / N / N+1`), restart idempotence, per-outpoint aggregation |
-| **RG** | 5 | Reorgs: un-credit, re-inclusion without double credit, conflicting spend as terminal, finality violation, chain flapping |
+| **RG** | 6 | Reorgs: un-credit, re-inclusion without double credit, conflicting spend as terminal, finality violation, chain flapping, resurrection re-sighting |
 | **TX** | 3 | Value conservation to the satoshi against the node's own fee accounting; depth and in-flight reservation guards; dust folding |
 | **FE** | 2 | The estimator that never answers (regtest returns an error payload by design) and the fee clamp |
 | **BR** | 3 | Rebroadcast is free while unconfirmed; "already mined" is terminal success; conflicting broadcast is typed and terminal |
