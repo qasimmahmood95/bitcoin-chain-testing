@@ -73,6 +73,43 @@ const LEVERS = [
     spec: 'test/integration/dr-03-watchonly-detection.spec.ts',
     sabotage: 'descriptor import skipped',
   },
+  // ── M3 ───────────────────────────────────────────────────────────────
+  {
+    id: 'CF-SM',
+    project: 'unit',
+    spec: 'test/unit/cf-state-machine.spec.ts',
+    sabotage: 'fixture finality depth lowered by one',
+  },
+  {
+    id: 'CF-03',
+    project: 'unit',
+    spec: 'test/unit/cf-03-model-based.spec.ts',
+    sabotage: 'oracle confirmation count off by one block',
+  },
+  {
+    id: 'CF-01',
+    project: 'integration',
+    spec: 'test/integration/cf-01-mempool-pending.spec.ts',
+    sabotage: 'mempool sightings counted as credited',
+  },
+  {
+    id: 'CF-02',
+    project: 'integration',
+    spec: 'test/integration/cf-02-credit-boundary.spec.ts',
+    sabotage: 'tracker finality depth lowered by one',
+  },
+  {
+    id: 'CF-04',
+    project: 'integration',
+    spec: 'test/integration/cf-04-restart-idempotence.spec.ts',
+    sabotage: 'checkpoint dropped — restart re-walks the whole window',
+  },
+  {
+    id: 'CF-05',
+    project: 'integration',
+    spec: 'test/integration/cf-05-outpoint-aggregation.spec.ts',
+    sabotage: 'records keyed by txid instead of outpoint',
+  },
 ];
 
 const requested = process.argv.slice(2);
