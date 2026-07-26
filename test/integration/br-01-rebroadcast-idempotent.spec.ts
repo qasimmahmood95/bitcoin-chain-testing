@@ -5,10 +5,10 @@
  *   broadcast; rebroadcast the IDENTICAL hex three more times while
  *   unconfirmed; mine 1.
  * Invariant: every retry returns the same txid with no error [pin: M6 —
- *   already-in-mempool is success, not an error]; the mempool holds
- *   exactly one entry for it and its size never moves across retries; the
- *   withdrawal record is byte-identical after every retry; the mined
- *   block spends the funding outpoint exactly once.
+ *   already-in-mempool is success, not an error]; the tx stays present
+ *   and the mempool size never moves across retries (no second entry is
+ *   ever minted); the withdrawal record is byte-identical after every
+ *   retry; the mined block spends the funding outpoint exactly once.
  * Custody risk: retry-storm double-debit — rebroadcast is routine ops and
  *   must never mint a second ledger entry or a second spend.
  * Falsification lever: FALSIFY=BR-01 records per broadcast attempt — the
@@ -103,8 +103,10 @@ describe('BR-01: rebroadcast idempotency while unconfirmed', () => {
       }
       expect(JSON.stringify(record)).toBe(baseline);
 
+      // Still present, and the size never moves: a retry that minted a
+      // SECOND entry (different txid) would break the equality.
       const mempool = await node.getRawMempool();
-      expect(mempool.filter((txid) => txid === spendTxid)).toHaveLength(1);
+      expect(mempool).toContain(spendTxid);
       expect(mempool.length).toBe(mempoolAfterFirst.length);
     }
 

@@ -93,7 +93,10 @@ describe('BR-03: conflicting-input broadcast is typed and terminal', () => {
     const signedA = await signAndTestAccept(node, signing, builtA);
     expect(signedA.accept?.allowed).toBe(true);
     const signedB = await signAndTestAccept(node, signing, builtB);
+    // B is a VALID tx (accepted standalone) refused later only for the conflict.
+    expect(signedB.accept?.allowed).toBe(true);
     const txidB = signedB.accept?.txid ?? '';
+    expect(txidB).not.toBe('');
 
     const sentA = await attemptBroadcast(node, signedA.hex);
     expect(sentA.kind).toBe('sent');

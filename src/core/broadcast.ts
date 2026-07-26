@@ -9,7 +9,9 @@
  * leaves the record untouched — crediting belongs to the confirmation
  * tracker, not here (BR-02); a conflict rejection moves the record to a
  * terminal `failed` state, never a stuck in-flight one (BR-03). Outcomes
- * that contradict the record's state throw rather than corrupt.
+ * that contradict the record's state throw rather than corrupt — including
+ * the exotic resurrection path (a conflict-failed tx later accepted, e.g.
+ * after its rival is evicted), which must fail loud, not self-heal.
  *
  * Error-code → outcome mapping is a characterization contract [pin: M6]:
  * the BR integration specs pin the exact codes and messages Core 31.1
@@ -35,6 +37,10 @@ const RPC_TRANSACTION_ALREADY_IN_CHAIN = -27;
 const RPC_TRANSACTION_ERROR = -25;
 /** RPC_TRANSACTION_REJECTED: mempool policy rejection (e.g. losing an RBF race). */
 const RPC_TRANSACTION_REJECTED = -26;
+/** An input is spent by a CONFIRMED conflicting tx [pin: M6, BR-03]. */
+const CHAIN_CONFLICT_MESSAGE = 'bad-txns-inputs-missingorspent';
+/** Losing the full-RBF replacement race to a mempool conflict [pin: M4/M6]. */
+const MEMPOOL_CONFLICT_MESSAGE_PREFIX = 'insufficient fee, rejecting replacement';
 
 /**
  * An RPC error this module refuses to guess about (transport trouble, bad
@@ -79,7 +85,17 @@ export function classifyBroadcastResult(
   if (result.code === RPC_TRANSACTION_ALREADY_IN_CHAIN) {
     return { kind: 'already-mined' };
   }
-  if (result.code === RPC_TRANSACTION_ERROR || result.code === RPC_TRANSACTION_REJECTED) {
+  // Conflict classification is gated on the exact pinned messages, not the
+  // bare codes: -26 is Core's generic policy bucket (min relay fee, dust,
+  // mempool full — transient, NOT conflicts) and -25 also carries maxfee
+  // refusals. Anything outside the pins is refused, never guessed.
+  if (result.code === RPC_TRANSACTION_ERROR && result.message === CHAIN_CONFLICT_MESSAGE) {
+    return { kind: 'rejected-conflict', reason: result.message };
+  }
+  if (
+    result.code === RPC_TRANSACTION_REJECTED &&
+    result.message.startsWith(MEMPOOL_CONFLICT_MESSAGE_PREFIX)
+  ) {
     return { kind: 'rejected-conflict', reason: result.message };
   }
   throw new UnclassifiedBroadcastError(result.code, result.message);

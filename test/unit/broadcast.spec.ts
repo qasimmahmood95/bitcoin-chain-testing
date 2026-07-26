@@ -60,6 +60,26 @@ describe('classifyBroadcastResult', () => {
       BroadcastStateError,
     );
   });
+
+  it('refuses to guess: -25/-26 outside the pinned messages are NOT conflicts', () => {
+    // -25 also carries maxfee refusals — config sanity, not a conflict.
+    expect(() =>
+      classifyBroadcastResult(
+        {
+          kind: 'rpc-error',
+          code: -25,
+          message: 'Fee exceeds maximum configured by user (e.g. -maxtxfee, maxfeerate)',
+        },
+        TXID,
+      ),
+    ).toThrow(UnclassifiedBroadcastError);
+    // -26 is the generic policy bucket; these are transient, not terminal.
+    for (const message of ['min relay fee not met', 'dust', 'too-long-mempool-chain']) {
+      expect(() =>
+        classifyBroadcastResult({ kind: 'rpc-error', code: -26, message }, TXID),
+      ).toThrow(UnclassifiedBroadcastError);
+    }
+  });
 });
 
 describe('applyBroadcastOutcome', () => {
