@@ -12,7 +12,11 @@ import { JsonRpcClient, RpcError, RpcTransportError } from '../rpc/client.js';
 import { regtestConnectionFromEnv } from './env.js';
 import { pollUntil, type PollBudget } from './poll.js';
 
-/** A coinbase output is spendable at depth 101 — pinned by the M1 characterization test. */
+/**
+ * Consensus coinbase maturity. The mempool checks it against the NEXT block,
+ * so a coinbase spend is accepted at depth 100 and first confirms at depth
+ * 101 — boundary pinned by the M1 characterization test.
+ */
 export const COINBASE_MATURITY = 100;
 
 export function connectRegtest(): BitcoindRpc {
@@ -20,6 +24,9 @@ export function connectRegtest(): BitcoindRpc {
 }
 
 const READY_BUDGET: PollBudget = { attempts: 30, delayMs: 1000 };
+
+/** bitcoind answers RPC with this code (over HTTP 500) while starting up. */
+const RPC_IN_WARMUP = -28;
 
 /** Gate: node reachable AND the chain is regtest — any other network is refused (hard limit 3). */
 export async function awaitRegtestReady(node: BitcoindRpc): Promise<void> {
@@ -30,7 +37,10 @@ export async function awaitRegtestReady(node: BitcoindRpc): Promise<void> {
       try {
         return await node.getBlockchainInfo();
       } catch (error) {
-        if (error instanceof RpcTransportError) {
+        if (
+          error instanceof RpcTransportError ||
+          (error instanceof RpcError && error.code === RPC_IN_WARMUP)
+        ) {
           return undefined;
         }
         throw error;

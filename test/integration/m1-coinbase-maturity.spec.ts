@@ -1,18 +1,21 @@
 /**
- * M1 characterization — coinbase maturity boundary. [pin]
+ * M1 characterization — the coinbase-maturity boundary at the mempool. [pin]
  *
  * Chain events driven: mine COINBASE_MATURITY+1 (101) blocks to an
  *   ephemeral node-side signing wallet, then attempt consensus-level spends
- *   of the coinbases now at depth 100 and depth 101 — the boundary is
- *   asserted from both sides at the same tip, no mining between asserts.
- * Invariant: the depth-100 spend is rejected with exactly
- *   "bad-txns-premature-spend-of-coinbase"; the depth-101 spend is accepted
- *   and broadcasts into the mempool.
- * Custody risk: crediting miner-funded deposits one block early — funds
- *   consensus can still take back. Also the ground truth under every later
- *   funding fixture (mine 101 before first spend).
- * Falsification lever: FALSIFY=MATURITY (harness lands M2) mines one block
- *   fewer; the depth-101 acceptance goes red.
+ *   of the coinbases now at depths 99, 100, and 101 — the boundary asserted
+ *   as a triplet at one tip, no mining between asserts.
+ * Invariant: mempool acceptance evaluates maturity against the NEXT block
+ *   (Core passes nSpendHeight = tip+1 to CheckTxInputs): the depth-99 spend
+ *   is rejected with exactly "bad-txns-premature-spend-of-coinbase"; the
+ *   depth-100 spend is accepted and broadcasts (it would first confirm at
+ *   depth 101); the depth-101 spend is accepted. A coinbase spend therefore
+ *   first *confirms* at depth 101 — why funding fixtures mine 101 blocks.
+ * Custody risk: treating miner-funded deposits as spendable a block early —
+ *   funds consensus can still take back — or refusing them a block late and
+ *   stalling withdrawals. Both sides of the boundary are pinned.
+ * Falsification lever: FALSIFY=MATURITY (harness lands M2) shifts the
+ *   boundary indices by one; the depth-99 rejection goes red.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -56,27 +59,35 @@ describe('M1 characterization: coinbase maturity', () => {
     expect(await node.getBlockCount()).toBe(heightBefore + COINBASE_MATURITY + 1);
   });
 
-  it('rejects a coinbase spend at depth 100 and accepts the same shape at depth 101', async () => {
-    // minedHashes[0] is now at depth 101 (mature), minedHashes[1] at depth 100.
-    const matureHash = minedHashes.at(0);
-    const immatureHash = minedHashes.at(1);
-    expect(matureHash).toBeDefined();
-    expect(immatureHash).toBeDefined();
-    if (matureHash === undefined || immatureHash === undefined) {
+  it('pins the mempool maturity boundary: depth 99 rejected, 100 accepted, 101 accepted', async () => {
+    // With tip at heightBefore+101: minedHashes[0] is at depth 101,
+    // minedHashes[1] at depth 100, minedHashes[2] at depth 99.
+    const depth101Hash = minedHashes.at(0);
+    const depth100Hash = minedHashes.at(1);
+    const depth99Hash = minedHashes.at(2);
+    expect(depth101Hash).toBeDefined();
+    expect(depth100Hash).toBeDefined();
+    expect(depth99Hash).toBeDefined();
+    if (depth101Hash === undefined || depth100Hash === undefined || depth99Hash === undefined) {
       return;
     }
 
-    const immatureSpend = await signedCoinbaseSpend(immatureHash);
-    const [immatureResult] = await node.testMempoolAccept([immatureSpend]);
-    expect(immatureResult?.allowed).toBe(false);
-    expect(immatureResult?.rejectReason).toBe('bad-txns-premature-spend-of-coinbase');
+    const prematureSpend = await signedCoinbaseSpend(depth99Hash);
+    const [prematureResult] = await node.testMempoolAccept([prematureSpend]);
+    expect(prematureResult?.allowed).toBe(false);
+    expect(prematureResult?.rejectReason).toBe('bad-txns-premature-spend-of-coinbase');
 
-    const matureSpend = await signedCoinbaseSpend(matureHash);
+    const boundarySpend = await signedCoinbaseSpend(depth100Hash);
+    const [boundaryResult] = await node.testMempoolAccept([boundarySpend]);
+    expect(boundaryResult?.rejectReason).toBeUndefined();
+    expect(boundaryResult?.allowed).toBe(true);
+
+    const matureSpend = await signedCoinbaseSpend(depth101Hash);
     const [matureResult] = await node.testMempoolAccept([matureSpend]);
     expect(matureResult?.rejectReason).toBeUndefined();
     expect(matureResult?.allowed).toBe(true);
 
-    const txid = await node.sendRawTransaction(matureSpend);
+    const txid = await node.sendRawTransaction(boundarySpend);
     expect(await node.getRawMempool()).toContain(txid);
   });
 });
