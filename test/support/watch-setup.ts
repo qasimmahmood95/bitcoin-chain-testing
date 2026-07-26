@@ -20,22 +20,46 @@ export function fixedAccount(): WatchAccount {
   return parseAccountPublicKey(FIXED_ACCOUNT_TPUB, { network: 'regtest', scriptType: 'p2wpkh' });
 }
 
-export async function watchOnlyFixture(
+/**
+ * Import only descriptors the wallet does not already hold. Core rejects a
+ * re-import of an active descriptor once the wallet has auto-extended its
+ * range past ours ("new range must include current range"), so idempotence
+ * has to come from a listdescriptors guard, not from re-importing.
+ */
+export async function ensureWatchDescriptors(
   node: BitcoindRpc,
-): Promise<{ account: WatchAccount; watch: BitcoindRpc }> {
-  const account = fixedAccount();
-  const watch = await openWatchOnlyWallet(node);
+  watch: BitcoindRpc,
+  account: WatchAccount,
+): Promise<void> {
   const receive = await node.getDescriptorInfo(accountDescriptor(account, 'receive'));
   const change = await node.getDescriptorInfo(accountDescriptor(account, 'change'));
-  await watch.importDescriptors([
+  const present = new Set(await watch.listDescriptors());
+  const wanted = [
     {
       desc: receive.descriptor,
       active: true,
       internal: false,
       range: WATCH_RANGE,
-      timestamp: 'now',
+      timestamp: 'now' as const,
     },
-    { desc: change.descriptor, active: true, internal: true, range: WATCH_RANGE, timestamp: 'now' },
-  ]);
+    {
+      desc: change.descriptor,
+      active: true,
+      internal: true,
+      range: WATCH_RANGE,
+      timestamp: 'now' as const,
+    },
+  ].filter((request) => !present.has(request.desc));
+  if (wanted.length > 0) {
+    await watch.importDescriptors(wanted);
+  }
+}
+
+export async function watchOnlyFixture(
+  node: BitcoindRpc,
+): Promise<{ account: WatchAccount; watch: BitcoindRpc }> {
+  const account = fixedAccount();
+  const watch = await openWatchOnlyWallet(node);
+  await ensureWatchDescriptors(node, watch, account);
   return { account, watch };
 }

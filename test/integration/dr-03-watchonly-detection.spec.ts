@@ -18,7 +18,6 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  accountDescriptor,
   assertAddressNetwork,
   deriveAddress,
   parseAccountPublicKey,
@@ -34,10 +33,10 @@ import {
 } from '../../src/testing/node.js';
 import { pollUntil } from '../../src/testing/poll.js';
 import { FIXED_ACCOUNT_TPUB } from '../support/fixed-account.js';
+import { ensureWatchDescriptors } from '../support/watch-setup.js';
 
 const DEPOSIT_SATS = 12_345_678n;
 const DEPOSIT_INDEX = 7;
-const IMPORT_RANGE: readonly [number, number] = [0, 49];
 
 describe('DR-03: watch-only deposit detection', () => {
   const node = connectRegtest();
@@ -50,7 +49,9 @@ describe('DR-03: watch-only deposit detection', () => {
 
   beforeAll(async () => {
     signing = await openSigningWallet(node);
-    watch = await openWatchOnlyWallet(node);
+    // Dedicated wallet: no other spec imports into it, so the FALSIFY=DR-03
+    // skip-import lever stays falsifiable even on a node other specs warmed.
+    watch = await openWatchOnlyWallet(node, 'bct-watch-dr03');
   });
 
   it('the watch-only wallet has private keys disabled from birth', async () => {
@@ -61,24 +62,7 @@ describe('DR-03: watch-only deposit detection', () => {
   it('detects a deposit to a derived address with zero key material', async () => {
     // FALSIFY=DR-03: the import never happens — the wallet watches nothing.
     if (!falsifyActive('DR-03')) {
-      const receive = await node.getDescriptorInfo(accountDescriptor(account, 'receive'));
-      const change = await node.getDescriptorInfo(accountDescriptor(account, 'change'));
-      await watch.importDescriptors([
-        {
-          desc: receive.descriptor,
-          active: true,
-          internal: false,
-          range: IMPORT_RANGE,
-          timestamp: 'now',
-        },
-        {
-          desc: change.descriptor,
-          active: true,
-          internal: true,
-          range: IMPORT_RANGE,
-          timestamp: 'now',
-        },
-      ]);
+      await ensureWatchDescriptors(node, watch, account);
     }
 
     const address = deriveAddress(account, 'receive', DEPOSIT_INDEX);

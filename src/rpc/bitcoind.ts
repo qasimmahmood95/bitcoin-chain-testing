@@ -162,6 +162,15 @@ export class BitcoindRpc {
     });
   }
 
+  /** Descriptor strings (with checksums) already present in this wallet. */
+  async listDescriptors(): Promise<string[]> {
+    const result = asObject(await this.rpc.call('listdescriptors'), 'listdescriptors');
+    return asArray(result['descriptors'], 'listdescriptors.descriptors').map((entry, index) => {
+      const context = `listdescriptors.descriptors[${String(index)}]`;
+      return asString(asObject(entry, context)['desc'], `${context}.desc`);
+    });
+  }
+
   async deriveAddresses(descriptor: string, range: readonly [number, number]): Promise<string[]> {
     return asStringArray(
       await this.rpc.call('deriveaddresses', [descriptor, range]),
