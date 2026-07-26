@@ -1,0 +1,15 @@
+# gitleaks gate — hard limit 2: no private key material may enter this
+# repository, ever. Default ruleset, plus explicit allowlisting of the ONE
+# credential-shaped string that belongs here: the fixed test-only regtest
+# rpcauth (see docker-compose.yml and scripts/rpcauth.mjs). Nothing else is
+# allowlisted; a reviewer finding key material is an automatic block.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fixed test-only regtest RPC credential — no real funds exist anywhere in this system"
+regexes = [
+  '''rpcauth=bct:c40d5dd1c7bb2d0e70f5070c8f4d63a9\$\$?3af32fc02a408bc44a45ee7908250bd3ad2ec04fbd9d69fed709662da27e80d4''',
+  '''regtest-test-only-not-a-secret''',
+]

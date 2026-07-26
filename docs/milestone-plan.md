@@ -29,7 +29,8 @@ state-machine/reorg policy sketch. No code.
 - Fixtures: fresh-chain guarantee (compose down -v semantics), mine-to
   helpers, ephemeral node-side signing wallet created per run.
 - Smoke + first characterization tests: node reachable; mine 101 and spend
-  a coinbase (**pins maturity: spend at depth 100 rejected, 101 accepted**);
+  a coinbase (**pins the mempool maturity boundary: spend at depth 99
+  rejected, 100 accepted** — the spend first confirms at depth 101);
   `estimatesmartfee` insufficient-data shape recorded.
 - CI workflow: lint → typecheck → unit → integration (compose `--wait`) →
   gitleaks.

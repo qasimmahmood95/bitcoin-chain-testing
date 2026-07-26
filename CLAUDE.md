@@ -58,9 +58,12 @@ so a Core version bump that changes the contract fails loudly.
 - Regtest: trivial PoW, blocks minable on demand via `generatetoaddress` /
   `generateblock`; bech32 HRP is `bcrt`. The chain is ephemeral — state
   dies with the container, so every run starts from genesis.
-- **Coinbase maturity is 100 blocks** — a coinbase output is spendable at
-  depth 101. Funding fixtures mine 101 blocks before first spend. [pin: M1
-  smoke asserts spend at 100 fails, 101 succeeds]
+- **Coinbase maturity is 100 blocks**, evaluated against the *next* block
+  (mempool acceptance passes `nSpendHeight = tip+1`): a coinbase spend
+  enters the mempool once the coinbase has 100 confirmations and first
+  *confirms* at depth 101. Funding fixtures mine 101 blocks before first
+  spend. [pin: M1 asserts the mempool boundary as a triplet — spend at
+  depth 99 rejected, 100 accepted, 101 accepted]
 - **`invalidateblock` / `reconsiderblock`** allow single-node deterministic
   reorgs: invalidate a block, mine a competing chain, optionally
   reconsider to flap back. **Nuance the whole reorg milestone turns on:**
