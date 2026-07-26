@@ -5,6 +5,7 @@
  * (ADR-0004).
  */
 
+import { satsToBtc } from './amount.js';
 import { JsonRpcClient } from './client.js';
 import {
   asArray,
@@ -71,8 +72,111 @@ export class BitcoindRpc {
     return asString(await this.rpc.call('getblockhash', [height]), 'getblockhash');
   }
 
-  async createWallet(walletName: string): Promise<void> {
-    await this.rpc.call('createwallet', [walletName]);
+  async createWallet(walletName: string, opts?: { disablePrivateKeys?: boolean }): Promise<void> {
+    await this.rpc.call('createwallet', {
+      wallet_name: walletName,
+      disable_private_keys: opts?.disablePrivateKeys ?? false,
+    });
+  }
+
+  async getWalletInfo(): Promise<{ walletName: string; privateKeysEnabled: boolean }> {
+    const info = asObject(await this.rpc.call('getwalletinfo'), 'getwalletinfo');
+    return {
+      walletName: asString(info['walletname'], 'getwalletinfo.walletname'),
+      privateKeysEnabled: asBoolean(
+        info['private_keys_enabled'],
+        'getwalletinfo.private_keys_enabled',
+      ),
+    };
+  }
+
+  /** Canonicalizes a descriptor and appends its checksum. */
+  async getDescriptorInfo(descriptor: string): Promise<{ descriptor: string; checksum: string }> {
+    const info = asObject(
+      await this.rpc.call('getdescriptorinfo', [descriptor]),
+      'getdescriptorinfo',
+    );
+    return {
+      descriptor: asString(info['descriptor'], 'getdescriptorinfo.descriptor'),
+      checksum: asString(info['checksum'], 'getdescriptorinfo.checksum'),
+    };
+  }
+
+  /** Imports ranged descriptors; throws if any import is not a success. */
+  async importDescriptors(
+    requests: readonly {
+      desc: string;
+      active: boolean;
+      internal: boolean;
+      range: readonly [number, number];
+      timestamp: 'now';
+    }[],
+  ): Promise<void> {
+    const results = asArray(
+      await this.rpc.call('importdescriptors', [requests]),
+      'importdescriptors',
+    );
+    results.forEach((entry, index) => {
+      const context = `importdescriptors[${String(index)}]`;
+      const record = asObject(entry, context);
+      if (!asBoolean(record['success'], `${context}.success`)) {
+        throw new Error(`${context}: import failed: ${JSON.stringify(record['error'])}`);
+      }
+    });
+  }
+
+  async deriveAddresses(descriptor: string, range: readonly [number, number]): Promise<string[]> {
+    return asStringArray(
+      await this.rpc.call('deriveaddresses', [descriptor, range]),
+      'deriveaddresses',
+    );
+  }
+
+  async listUnspent(
+    minConf: number,
+    addresses: readonly string[],
+  ): Promise<{ txid: string; vout: number; amountSats: bigint; confirmations: number }[]> {
+    const results = asArray(
+      await this.rpc.call('listunspent', [minConf, 9999999, addresses]),
+      'listunspent',
+    );
+    return results.map((entry, index) => {
+      const context = `listunspent[${String(index)}]`;
+      const record = asObject(entry, context);
+      return {
+        txid: asString(record['txid'], `${context}.txid`),
+        vout: asInteger(record['vout'], `${context}.vout`),
+        amountSats: asSats(record['amount'], `${context}.amount`),
+        confirmations: asInteger(record['confirmations'], `${context}.confirmations`),
+      };
+    });
+  }
+
+  /** Wallet-funded send with an explicit feerate — no estimator, no fallbackfee. */
+  async sendToAddress(
+    address: string,
+    amountSats: bigint,
+    feeRateSatPerVb: number,
+  ): Promise<string> {
+    if (!Number.isInteger(feeRateSatPerVb) || feeRateSatPerVb <= 0) {
+      throw new RangeError(
+        `fee rate must be a positive integer of sat/vB: ${String(feeRateSatPerVb)}`,
+      );
+    }
+    return asString(
+      await this.rpc.call('sendtoaddress', {
+        address,
+        amount: satsToBtc(amountSats),
+        fee_rate: feeRateSatPerVb,
+      }),
+      'sendtoaddress',
+    );
+  }
+
+  async getBalances(): Promise<{ trustedSats: bigint }> {
+    const balances = asObject(await this.rpc.call('getbalances'), 'getbalances');
+    const mine = asObject(balances['mine'], 'getbalances.mine');
+    return { trustedSats: asSats(mine['trusted'], 'getbalances.mine.trusted') };
   }
 
   async loadWallet(walletName: string): Promise<void> {
