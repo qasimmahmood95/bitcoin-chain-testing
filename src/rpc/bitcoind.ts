@@ -7,6 +7,7 @@
 
 import { satsToBtc } from './amount.js';
 import { JsonRpcClient } from './client.js';
+import type { JsonValue } from './json.js';
 import {
   asArray,
   asBoolean,
@@ -45,6 +46,42 @@ export interface SmartFeeEstimate {
   readonly blocks: number;
   readonly feeRateSatsPerKvB: bigint | undefined;
   readonly errors: string[] | undefined;
+}
+
+export interface BlockHeader {
+  readonly height: number;
+  readonly previousBlockHash: string | null;
+}
+
+export interface TransactionOutput {
+  readonly vout: number;
+  readonly address: string | null;
+  readonly valueSats: bigint;
+}
+
+export interface BlockWithTransactions {
+  readonly hash: string;
+  readonly height: number;
+  readonly transactions: readonly {
+    readonly txid: string;
+    readonly outputs: readonly TransactionOutput[];
+  }[];
+}
+
+function decodeTransactionOutputs(
+  vouts: readonly JsonValue[],
+  context: string,
+): TransactionOutput[] {
+  return vouts.map((entry, index) => {
+    const outContext = `${context}.vout[${String(index)}]`;
+    const record = asObject(entry, outContext);
+    const scriptPubKey = asObject(record['scriptPubKey'], `${outContext}.scriptPubKey`);
+    return {
+      vout: asInteger(record['n'], `${outContext}.n`),
+      address: asOptional(scriptPubKey['address'], asString, `${outContext}.address`) ?? null,
+      valueSats: asSats(record['value'], `${outContext}.value`),
+    };
+  });
 }
 
 export class BitcoindRpc {
@@ -195,6 +232,73 @@ export class BitcoindRpc {
     return asStringArray(
       await this.rpc.call('generatetoaddress', [blocks, address]),
       'generatetoaddress',
+    );
+  }
+
+  async getBestBlockHash(): Promise<string> {
+    return asString(await this.rpc.call('getbestblockhash'), 'getbestblockhash');
+  }
+
+  async getBlockHeader(blockHash: string): Promise<BlockHeader> {
+    const header = asObject(await this.rpc.call('getblockheader', [blockHash]), 'getblockheader');
+    return {
+      height: asInteger(header['height'], 'getblockheader.height'),
+      previousBlockHash:
+        asOptional(header['previousblockhash'], asString, 'getblockheader.previousblockhash') ??
+        null,
+    };
+  }
+
+  /** Full block with per-transaction outputs, via `getblock <hash> 2` — the watcher's connect feed. */
+  async getBlockWithTransactions(blockHash: string): Promise<BlockWithTransactions> {
+    const block = asObject(await this.rpc.call('getblock', [blockHash, 2]), 'getblock');
+    const transactions = asArray(block['tx'], 'getblock.tx').map((entry, index) => {
+      const context = `getblock.tx[${String(index)}]`;
+      const record = asObject(entry, context);
+      return {
+        txid: asString(record['txid'], `${context}.txid`),
+        outputs: decodeTransactionOutputs(asArray(record['vout'], `${context}.vout`), context),
+      };
+    });
+    return {
+      hash: asString(block['hash'], 'getblock.hash'),
+      height: asInteger(block['height'], 'getblock.height'),
+      transactions,
+    };
+  }
+
+  /** Decoded outputs of a mempool or chain transaction (txindex=1) — the watcher's mempool feed. */
+  async getRawTransactionOutputs(txid: string): Promise<TransactionOutput[]> {
+    const tx = asObject(
+      await this.rpc.call('getrawtransaction', [txid, true]),
+      'getrawtransaction',
+    );
+    return decodeTransactionOutputs(
+      asArray(tx['vout'], 'getrawtransaction.vout'),
+      'getrawtransaction',
+    );
+  }
+
+  /** One transaction paying several addresses (CF-05), explicit sat/vB feerate. */
+  async sendMany(
+    amounts: Readonly<Record<string, bigint>>,
+    feeRateSatPerVb: number,
+  ): Promise<string> {
+    if (!Number.isInteger(feeRateSatPerVb) || feeRateSatPerVb <= 0) {
+      throw new RangeError(
+        `fee rate must be a positive integer of sat/vB: ${String(feeRateSatPerVb)}`,
+      );
+    }
+    const decimalAmounts: Record<string, string> = {};
+    for (const [address, sats] of Object.entries(amounts)) {
+      decimalAmounts[address] = satsToBtc(sats);
+    }
+    return asString(
+      await this.rpc.call('sendmany', {
+        amounts: decimalAmounts,
+        fee_rate: feeRateSatPerVb,
+      }),
+      'sendmany',
     );
   }
 
