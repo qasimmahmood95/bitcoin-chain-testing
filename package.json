@@ -1,0 +1,31 @@
+{
+  "name": "bitcoin-chain-testing",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Integration test harness for the custodian ↔ bitcoind boundary: deterministic regtest scenarios for confirmation races, reorgs, fee-estimator degradation, and rebroadcast ambiguity.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
+    "stack:up": "docker compose up -d --wait",
+    "stack:down": "docker compose down -v",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "fast-check": "^4.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.2.0"
+  }
+}
