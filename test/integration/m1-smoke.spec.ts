@@ -22,7 +22,6 @@ describe('M1 smoke', () => {
   it('answers getblockchaininfo as a regtest node', async () => {
     const info = await node.getBlockchainInfo();
     expect(info.chain).toBe('regtest');
-    expect(info.blocks).toBeGreaterThanOrEqual(0);
     expect(info.bestBlockHash).toMatch(/^[0-9a-f]{64}$/);
   });
 

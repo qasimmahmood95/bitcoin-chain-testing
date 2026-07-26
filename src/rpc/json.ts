@@ -27,6 +27,11 @@ export class JsonParseError extends Error {
   }
 }
 
+/**
+ * Recursion depth is bounded by the engine stack (a pathological nesting
+ * depth throws RangeError, not JsonParseError) — acceptable: bitcoind
+ * response shapes are shallow and this parser is not exposed to attackers.
+ */
 export function parseJson(text: string): JsonValue {
   const parser = new Parser(text);
   const value = parser.parseValue();
