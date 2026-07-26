@@ -37,7 +37,14 @@ const START_HEIGHT = 50;
 type Op =
   | { readonly op: 'deposit'; readonly amount: number }
   | { readonly op: 'mine'; readonly includeMask: number }
-  | { readonly op: 'reorg'; readonly depth: number; readonly reincludeMask: number };
+  | { readonly op: 'reorg'; readonly depth: number; readonly reincludeMask: number }
+  /**
+   * A mempool sighting of an outpoint the tracker already knows, at ANY
+   * point in its life — what a rescan, a rebroadcast, or a restart with a
+   * lost seen-set produces. Legal input; must always be a no-op, never a
+   * downgrade of a confirming or credited record.
+   */
+  | { readonly op: 'resight'; readonly which: number };
 
 const opArb: fc.Arbitrary<Op> = fc.oneof(
   {
@@ -55,8 +62,15 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
     weight: 2,
     arbitrary: fc.record({
       op: fc.constant('reorg' as const),
-      depth: fc.integer({ min: 1, max: 3 }),
+      depth: fc.integer({ min: 1, max: 8 }), // deep enough to reach a credit
       reincludeMask: fc.nat({ max: 255 }),
+    }),
+  },
+  {
+    weight: 2,
+    arbitrary: fc.record({
+      op: fc.constant('resight' as const),
+      which: fc.nat({ max: 255 }),
     }),
   },
 );
@@ -77,6 +91,8 @@ function eventsFromOps(ops: readonly Op[]): ChainEvent[] {
   const events: ChainEvent[] = [];
   const chain: SimBlock[] = [];
   let mempool: WatchedDeposit[] = [];
+  /** Every deposit ever broadcast — the pool a re-sighting can draw from. */
+  const known: WatchedDeposit[] = [];
   let nextTx = 0;
   let nextHashSalt = 0;
   const tip = (): number => START_HEIGHT + chain.length;
@@ -90,7 +106,15 @@ function eventsFromOps(ops: readonly Op[]): ChainEvent[] {
       };
       nextTx += 1;
       mempool.push(deposit);
+      known.push(deposit);
       events.push({ kind: 'mempool', deposit });
+    } else if (op.op === 'resight') {
+      // Re-sight an already-known deposit whatever state it is in — the
+      // rebroadcast / rescan path. Correct behaviour: nothing changes.
+      const deposit = known[op.which % Math.max(known.length, 1)];
+      if (deposit !== undefined) {
+        events.push({ kind: 'mempool', deposit });
+      }
     } else if (op.op === 'mine') {
       const included = mempool.filter((_, i) => (op.includeMask >> (i % 8)) & 1);
       mempool = mempool.filter((deposit) => !included.includes(deposit));

@@ -54,7 +54,11 @@ jobs:
     # the whole point is evidence of WHICH lanes catch the bug, so the
     # integration suite must run even after a unit pin has already gone
     # red. `defect/*` is red by design either way.
-    if: ${{ !cancelled() && (success() || startsWith(github.ref, 'refs/heads/defect/')) }}
+    # (`head_ref` covers a pull_request event, where `ref` is refs/pull/N/merge.)
+    if: >-
+      ${{ !cancelled() && (success()
+      || startsWith(github.ref, 'refs/heads/defect/')
+      || startsWith(github.head_ref, 'defect/')) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

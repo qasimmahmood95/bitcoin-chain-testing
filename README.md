@@ -176,6 +176,9 @@ test/integration/  the scenario suite: DR · CF · RG · TX · FE · BR
 docs/adr/     decision records
 ```
 
+Scenario IDs by group (some are proven in the unit lane rather than
+against the node, so these do not sum to the 22 integration spec files):
+
 | Group | Scenarios | What it pins |
 |---|---|---|
 | **DR** | 4 | Address derivation from **account-level public keys** only; parity against the node's own `deriveaddresses`; watch-only descriptor import; cross-network rejection |
