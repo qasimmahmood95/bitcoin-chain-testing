@@ -141,6 +141,12 @@ const LEVERS = [
     spec: 'test/integration/rg-05-chain-flapping.spec.ts',
     sabotage: 'window replayed without checkpoint dedup',
   },
+  {
+    id: 'RG-06',
+    project: 'integration',
+    spec: 'test/integration/rg-06-resurrected-resighting.spec.ts',
+    sabotage: 'watcher state dropped — the credit latch goes with it',
+  },
   // ── M5 ───────────────────────────────────────────────────────────────
   {
     id: 'TX-01',
