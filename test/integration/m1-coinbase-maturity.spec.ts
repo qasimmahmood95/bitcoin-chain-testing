@@ -14,15 +14,16 @@
  * Custody risk: treating miner-funded deposits as spendable a block early —
  *   funds consensus can still take back — or refusing them a block late and
  *   stalling withdrawals. Both sides of the boundary are pinned.
- * Falsification lever: FALSIFY=MATURITY (harness lands M2) mines one extra
- *   block before the asserts, shifting every depth up by one — the block
- *   asserted as depth-99-rejected is then at depth 100, and the rejection
- *   assertion goes red.
+ * Falsification lever: FALSIFY=MATURITY mines one extra block before the
+ *   asserts, shifting every depth up by one — the block asserted as
+ *   depth-99-rejected is then at depth 100, and the rejection assertion
+ *   goes red.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { satsToBtc } from '../../src/rpc/amount.js';
 import type { BitcoindRpc } from '../../src/rpc/bitcoind.js';
+import { falsifyActive } from '../../src/testing/falsify.js';
 import {
   COINBASE_MATURITY,
   connectRegtest,
@@ -41,7 +42,9 @@ describe('M1 characterization: coinbase maturity', () => {
   beforeAll(async () => {
     wallet = await openSigningWallet(node);
     heightBefore = await node.getBlockCount();
-    minedHashes = await mineToWallet(node, wallet, COINBASE_MATURITY + 1);
+    // FALSIFY=MATURITY: one extra block shifts every asserted depth by one.
+    const blocks = COINBASE_MATURITY + 1 + (falsifyActive('MATURITY') ? 1 : 0);
+    minedHashes = await mineToWallet(node, wallet, blocks);
   });
 
   async function signedCoinbaseSpend(blockHash: string): Promise<string> {

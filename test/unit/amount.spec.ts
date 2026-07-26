@@ -7,23 +7,31 @@
  *   >8 dp, separators) is rejected, never coerced.
  * Custody risk: float rounding at the RPC boundary silently corrupts
  *   balances — 0.1 BTC has no IEEE-754 double representation.
- * Falsification lever: FALSIFY=AMOUNT (harness lands M2) reroutes conversion
- *   through parseFloat; the 0.1 case and the round-trip property go red.
+ * Falsification lever: FALSIFY=AMOUNT swaps in the classic truncating
+ *   float conversion (trunc(parseFloat(s)·1e8)); the exact-decimal cases
+ *   and both properties go red.
  */
 
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { AmountFormatError, btcToSats, satsToBtc } from '../../src/rpc/amount.js';
+import { falsifyActive } from '../../src/testing/falsify.js';
+
+// FALSIFY=AMOUNT: the truncation bug every float-money incident starts with.
+const convert = falsifyActive('AMOUNT')
+  ? (decimal: string): bigint => BigInt(Math.trunc(Number.parseFloat(decimal) * 1e8))
+  : btcToSats;
 
 describe('btcToSats', () => {
   it('converts exact decimals', () => {
-    expect(btcToSats('0')).toBe(0n);
-    expect(btcToSats('1')).toBe(100_000_000n);
-    expect(btcToSats('0.1')).toBe(10_000_000n);
-    expect(btcToSats('50.00000000')).toBe(5_000_000_000n);
-    expect(btcToSats('0.00000001')).toBe(1n);
-    expect(btcToSats('20999999.97690000')).toBe(2_099_999_997_690_000n);
-    expect(btcToSats('-0.00500000')).toBe(-500_000n);
+    expect(convert('0')).toBe(0n);
+    expect(convert('1')).toBe(100_000_000n);
+    expect(convert('0.1')).toBe(10_000_000n);
+    expect(convert('0.29')).toBe(29_000_000n);
+    expect(convert('50.00000000')).toBe(5_000_000_000n);
+    expect(convert('0.00000001')).toBe(1n);
+    expect(convert('20999999.97690000')).toBe(2_099_999_997_690_000n);
+    expect(convert('-0.00500000')).toBe(-500_000n);
   });
 
   it('rejects everything that is not a plain ≤8-dp decimal', () => {
@@ -53,7 +61,7 @@ describe('btcToSats', () => {
       fc.property(
         fc.bigInt({ min: -2_100_000_000_000_000n, max: 2_100_000_000_000_000n }),
         (sats) => {
-          expect(btcToSats(satsToBtc(sats))).toBe(sats);
+          expect(convert(satsToBtc(sats))).toBe(sats);
         },
       ),
     );
@@ -63,7 +71,7 @@ describe('btcToSats', () => {
     fc.assert(
       fc.property(fc.nat({ max: 20_999_999 }), fc.nat({ max: 99_999_999 }), (whole, fraction) => {
         const text = `${String(whole)}.${String(fraction).padStart(8, '0')}`;
-        expect(btcToSats(text)).toBe(BigInt(whole) * 100_000_000n + BigInt(fraction));
+        expect(convert(text)).toBe(BigInt(whole) * 100_000_000n + BigInt(fraction));
       }),
     );
   });

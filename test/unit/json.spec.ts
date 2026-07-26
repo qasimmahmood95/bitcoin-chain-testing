@@ -6,13 +6,35 @@
  *   surfaces with its untouched decimal source text — no double round-trip.
  * Custody risk: bitcoind amounts passing through IEEE-754 doubles drift by
  *   a satoshi and the drift compounds silently.
- * Falsification lever: FALSIFY=JSON (harness lands M2) routes numbers
- *   through Number(); the 0.1-preservation case goes red.
+ * Falsification lever: FALSIFY=JSON routes parsed numbers through
+ *   Number() the way a naive parser would; the source-text-preservation
+ *   case goes red (50.00000000 collapses to 50).
  */
 
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { JsonParseError, parseJson, RawNumber, type JsonValue } from '../../src/rpc/json.js';
+import { falsifyActive } from '../../src/testing/falsify.js';
+
+// FALSIFY=JSON: what every JSON.parse-based client does to number text.
+function throughDoubles(value: JsonValue): JsonValue {
+  if (value instanceof RawNumber) {
+    return new RawNumber(String(Number(value.text)));
+  }
+  if (Array.isArray(value)) {
+    return value.map(throughDoubles);
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, throughDoubles(entry)]),
+    );
+  }
+  return value;
+}
+
+const parse = falsifyActive('JSON')
+  ? (text: string): JsonValue => throughDoubles(parseJson(text))
+  : parseJson;
 
 function rehydrate(value: JsonValue): unknown {
   if (value instanceof RawNumber) {
@@ -29,7 +51,7 @@ function rehydrate(value: JsonValue): unknown {
 
 describe('parseJson', () => {
   it('preserves number source text exactly', () => {
-    const parsed = parseJson('{"amount":0.1,"fee":-0.00001000,"subsidy":50.00000000,"height":101}');
+    const parsed = parse('{"amount":0.1,"fee":-0.00001000,"subsidy":50.00000000,"height":101}');
     expect(parsed).toEqual({
       amount: new RawNumber('0.1'),
       fee: new RawNumber('-0.00001000'),
@@ -40,7 +62,7 @@ describe('parseJson', () => {
 
   it('parses structures, escapes, and literals like JSON.parse', () => {
     const text = '{"a":[1,[],{},"\\u0041\\n\\"\\\\"],"b":null,"c":true,"d":false,"e":""}';
-    expect(rehydrate(parseJson(text))).toEqual(JSON.parse(text));
+    expect(rehydrate(parse(text))).toEqual(JSON.parse(text));
   });
 
   it('rejects malformed input', () => {
@@ -59,12 +81,12 @@ describe('parseJson', () => {
       '{"a":\u00011}', // control character where a value belongs
     ];
     for (const input of malformed) {
-      expect(() => parseJson(input), JSON.stringify(input)).toThrow(JsonParseError);
+      expect(() => parse(input), JSON.stringify(input)).toThrow(JsonParseError);
     }
   });
 
   it('does not let response keys pollute prototypes', () => {
-    const parsed = parseJson('{"__proto__":{"polluted":true}}');
+    const parsed = parse('{"__proto__":{"polluted":true}}');
     expect({} as { polluted?: boolean }).not.toHaveProperty('polluted');
     expect(Object.getPrototypeOf(parsed)).toBeNull();
   });
@@ -73,7 +95,7 @@ describe('parseJson', () => {
     fc.assert(
       fc.property(fc.jsonValue(), (document) => {
         const text = JSON.stringify(document);
-        expect(rehydrate(parseJson(text))).toEqual(JSON.parse(text));
+        expect(rehydrate(parse(text))).toEqual(JSON.parse(text));
       }),
     );
   });

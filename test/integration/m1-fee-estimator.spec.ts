@@ -8,11 +8,13 @@
  *   "Insufficient data or no feerate found".
  * Custody risk: fee logic that assumes the estimator always answers —
  *   withdrawal outage the moment it degrades (a live-incident classic).
- * Falsification lever: FALSIFY=FEE-PIN (harness lands M2) asserts a feerate
- *   is present — red on every run.
+ * Falsification lever: FALSIFY=FEE-PIN additionally asserts a feerate is
+ *   present — red on every run, proving the absence assertions consult the
+ *   live estimator.
  */
 
 import { describe, expect, it } from 'vitest';
+import { falsifyActive } from '../../src/testing/falsify.js';
 import { connectRegtest } from '../../src/testing/node.js';
 
 describe('M1 characterization: estimatesmartfee on regtest', () => {
@@ -20,6 +22,10 @@ describe('M1 characterization: estimatesmartfee on regtest', () => {
 
   it('has no feerate and reports insufficient data', async () => {
     const estimate = await node.estimateSmartFee(6);
+    if (falsifyActive('FEE-PIN')) {
+      // FALSIFY=FEE-PIN: demand the feerate the regtest estimator can never give.
+      expect(estimate.feeRateSatsPerKvB).toBeDefined();
+    }
     expect(estimate.feeRateSatsPerKvB).toBeUndefined();
     expect(estimate.errors).toEqual(['Insufficient data or no feerate found']);
   });

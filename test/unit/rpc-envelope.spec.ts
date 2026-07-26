@@ -9,19 +9,31 @@
  *   loudly instead of flowing on.
  * Custody risk: a swallowed RPC error path turns "bitcoind said no" into
  *   "looks fine" — the error-path corruption BR-03 later builds on.
- * Falsification lever: FALSIFY=ENVELOPE (harness lands M2) returns null on
- *   the error path; the -26 case goes red.
+ * Falsification lever: FALSIFY=ENVELOPE swallows the error path to null —
+ *   "bitcoind said no" becomes "looks fine" — and the -26 case goes red.
  */
 
 import { describe, expect, it } from 'vitest';
 import { interpretRpcResponseBody, RpcError, RpcTransportError } from '../../src/rpc/client.js';
 import { asInteger, asSats, DecodeError } from '../../src/rpc/decode.js';
 import { parseJson, RawNumber } from '../../src/rpc/json.js';
+import { falsifyActive } from '../../src/testing/falsify.js';
+
+// FALSIFY=ENVELOPE: the catch-and-carry-on bug on the RPC error path.
+const interpret = falsifyActive('ENVELOPE')
+  ? (body: string, method: string): unknown => {
+      try {
+        return interpretRpcResponseBody(body, method);
+      } catch {
+        return null;
+      }
+    }
+  : interpretRpcResponseBody;
 
 describe('interpretRpcResponseBody', () => {
   it('returns the result on success', () => {
     const body = '{"result":{"chain":"regtest"},"error":null,"id":"bitcoin-chain-testing"}';
-    expect(interpretRpcResponseBody(body, 'getblockchaininfo')).toEqual({ chain: 'regtest' });
+    expect(interpret(body, 'getblockchaininfo')).toEqual({ chain: 'regtest' });
   });
 
   it('turns a bitcoind error envelope into a typed RpcError', () => {
@@ -29,7 +41,7 @@ describe('interpretRpcResponseBody', () => {
       '{"result":null,"error":{"code":-26,"message":"bad-txns-premature-spend-of-coinbase"},"id":"bitcoin-chain-testing"}';
     let caught: unknown;
     try {
-      interpretRpcResponseBody(body, 'sendrawtransaction');
+      interpret(body, 'sendrawtransaction');
     } catch (error) {
       caught = error;
     }
@@ -40,7 +52,7 @@ describe('interpretRpcResponseBody', () => {
   });
 
   it('treats a non-JSON body as a transport failure', () => {
-    expect(() => interpretRpcResponseBody('Work queue depth exceeded', 'getblockcount')).toThrow(
+    expect(() => interpret('Work queue depth exceeded', 'getblockcount')).toThrow(
       RpcTransportError,
     );
   });
