@@ -40,6 +40,9 @@ export interface MempoolAcceptResult {
   readonly txid: string;
   readonly allowed: boolean;
   readonly rejectReason: string | undefined;
+  /** Present when allowed: the node's own fee accounting — TX-01's oracle. */
+  readonly feeSats: bigint | undefined;
+  readonly vsize: number | undefined;
 }
 
 export interface SmartFeeEstimate {
@@ -446,12 +449,39 @@ export class BitcoindRpc {
     return results.map((entry, index) => {
       const context = `testmempoolaccept[${String(index)}]`;
       const record = asObject(entry, context);
+      const fees = asOptional(record['fees'], asObject, `${context}.fees`);
       return {
         txid: asString(record['txid'], `${context}.txid`),
         allowed: asBoolean(record['allowed'], `${context}.allowed`),
         rejectReason: asOptional(record['reject-reason'], asString, `${context}.reject-reason`),
+        feeSats: fees === undefined ? undefined : asSats(fees['base'], `${context}.fees.base`),
+        vsize: asOptional(record['vsize'], asInteger, `${context}.vsize`),
       };
     });
+  }
+
+  /** PSBT hand-off (M5): the library builds, the node-side wallet signs. */
+  async createPsbt(
+    inputs: readonly { txid: string; vout: number }[],
+    outputs: Readonly<Record<string, string>>,
+  ): Promise<string> {
+    return asString(await this.rpc.call('createpsbt', [inputs, outputs]), 'createpsbt');
+  }
+
+  async walletProcessPsbt(psbt: string): Promise<{ psbt: string; complete: boolean }> {
+    const result = asObject(await this.rpc.call('walletprocesspsbt', [psbt]), 'walletprocesspsbt');
+    return {
+      psbt: asString(result['psbt'], 'walletprocesspsbt.psbt'),
+      complete: asBoolean(result['complete'], 'walletprocesspsbt.complete'),
+    };
+  }
+
+  async finalizePsbt(psbt: string): Promise<{ hex: string; complete: boolean }> {
+    const result = asObject(await this.rpc.call('finalizepsbt', [psbt]), 'finalizepsbt');
+    return {
+      hex: asString(result['hex'], 'finalizepsbt.hex'),
+      complete: asBoolean(result['complete'], 'finalizepsbt.complete'),
+    };
   }
 
   async sendRawTransaction(rawTx: string): Promise<string> {
