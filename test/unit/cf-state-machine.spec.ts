@@ -186,6 +186,60 @@ describe('confirmation state machine', () => {
     expect(() => initialTrackerState(0, START_HEIGHT)).toThrow(ChainEventError);
   });
 
+  it('rejects corrupted snapshots that decouple the credit latch', () => {
+    const credited = run(newTracker(), [
+      connectAt(START_HEIGHT + 1, [DEPOSIT]),
+      ...emptyConnects(START_HEIGHT + 2, N - 1),
+    ]);
+    const snapshot = snapshotTrackerState(credited.state);
+    const record = snapshot.records[0];
+    expect(record).toBeDefined();
+    if (record === undefined) {
+      return;
+    }
+
+    // CONFIRMING with a latched credit height: the double-credit vector.
+    expect(() =>
+      restoreTrackerState({
+        ...snapshot,
+        records: [{ ...record, state: 'CONFIRMING' }],
+      }),
+    ).toThrow(ChainEventError);
+
+    // CREDITED with no latch is equally inconsistent.
+    expect(() =>
+      restoreTrackerState({
+        ...snapshot,
+        records: [{ ...record, creditedAtHeight: null }],
+      }),
+    ).toThrow(ChainEventError);
+
+    // CONFIRMING without inclusion, and inclusion above the tip.
+    expect(() =>
+      restoreTrackerState({
+        ...snapshot,
+        records: [{ ...record, state: 'CONFIRMING', creditedAtHeight: null, inclusion: null }],
+      }),
+    ).toThrow(ChainEventError);
+    expect(() =>
+      restoreTrackerState({
+        ...snapshot,
+        tipHeight: (record.inclusion?.height ?? 0) - 1,
+      }),
+    ).toThrow(ChainEventError);
+  });
+
+  it('a restored credited record never re-credits as the chain extends', () => {
+    const credited = run(newTracker(), [
+      connectAt(START_HEIGHT + 1, [DEPOSIT]),
+      ...emptyConnects(START_HEIGHT + 2, N - 1),
+    ]);
+    const restored = restoreTrackerState(snapshotTrackerState(credited.state));
+    const extended = run(restored, emptyConnects(restored.tipHeight + 1, 3));
+    expect(extended.events).toEqual([]); // the latch survives restore
+    expect(recordOf(extended.state).creditedAtHeight).toBe(START_HEIGHT + N);
+  });
+
   it('snapshot/restore round-trips exactly, bigint sats included', () => {
     const populated = run(newTracker(), [
       { kind: 'mempool', deposit: DEPOSIT },

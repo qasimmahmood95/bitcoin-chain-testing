@@ -273,10 +273,36 @@ export function snapshotTrackerState(state: TrackerState): TrackerSnapshot {
   };
 }
 
+/**
+ * Restore validates every record's internal consistency — the credited
+ * latch (`creditedAtHeight`) and the state field must agree, and inclusion
+ * must match the state. A corrupted checkpoint that decouples them could
+ * otherwise re-credit on the next connect; corrupt input crashes loudly
+ * instead of ever reaching accounting.
+ */
 export function restoreTrackerState(snapshot: TrackerSnapshot): TrackerState {
   const records = new Map<string, DepositRecord>();
   for (const record of snapshot.records) {
-    records.set(outpointKey(record.outpoint), {
+    const key = outpointKey(record.outpoint);
+    const credited = record.state === 'CREDITED';
+    if (credited !== (record.creditedAtHeight !== null)) {
+      throw new ChainEventError(
+        `corrupt snapshot: ${key} is ${record.state} with creditedAtHeight ${String(record.creditedAtHeight)}`,
+      );
+    }
+    if (record.state === 'CONFIRMING' && record.inclusion === null) {
+      throw new ChainEventError(`corrupt snapshot: ${key} is CONFIRMING without inclusion`);
+    }
+    if (
+      (record.state === 'SEEN_MEMPOOL' || record.state === 'CONFLICTED') &&
+      record.inclusion !== null
+    ) {
+      throw new ChainEventError(`corrupt snapshot: ${key} is ${record.state} with inclusion`);
+    }
+    if (record.inclusion !== null && record.inclusion.height > snapshot.tipHeight) {
+      throw new ChainEventError(`corrupt snapshot: ${key} included above the tip`);
+    }
+    records.set(key, {
       ...record,
       amountSats: BigInt(record.amountSats),
     });
