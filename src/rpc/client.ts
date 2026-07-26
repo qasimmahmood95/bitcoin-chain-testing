@@ -12,7 +12,17 @@ export interface RpcConnection {
   readonly url: string;
   readonly username: string;
   readonly password: string;
+  /** Per-call abort budget; defaults to {@link DEFAULT_CALL_TIMEOUT_MS}. */
+  readonly timeoutMs?: number;
 }
+
+/**
+ * Every call is wall-time bounded so a wedged connection cannot defeat the
+ * fixtures' explicit polling budgets (determinism policy: no unbounded
+ * waits). Generous enough for the slowest regtest call the suite makes
+ * (mining 101 blocks).
+ */
+export const DEFAULT_CALL_TIMEOUT_MS = 30_000;
 
 /** bitcoind processed the call and rejected it (JSON-RPC error object). */
 export class RpcError extends Error {
@@ -75,22 +85,28 @@ export class JsonRpcClient {
   }
 
   async call(method: string, params: readonly unknown[] = []): Promise<JsonValue> {
-    const { url, username, password } = this.connection;
+    const { url, username, password, timeoutMs } = this.connection;
     const authorization = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
-    let response: Response;
+    const signal = AbortSignal.timeout(timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS);
+    let body: string;
+    let ok: boolean;
+    let status: number;
     try {
-      response = await fetch(new URL(this.path, url), {
+      const response = await fetch(new URL(this.path, url), {
         method: 'POST',
         headers: { authorization, 'content-type': 'application/json' },
         body: JSON.stringify({ jsonrpc: '1.0', id: 'bitcoin-chain-testing', method, params }),
+        signal,
       });
+      ok = response.ok;
+      status = response.status;
+      body = await response.text();
     } catch (cause) {
-      throw new RpcTransportError(`${method}: bitcoind unreachable at ${url}`, { cause });
+      throw new RpcTransportError(`${method}: no response from bitcoind at ${url}`, { cause });
     }
-    const body = await response.text();
-    if (!response.ok && body.trim() === '') {
+    if (!ok && body.trim() === '') {
       throw new RpcTransportError(
-        `${method}: HTTP ${String(response.status)} with empty body (bad credentials?)`,
+        `${method}: HTTP ${String(status)} with empty body (bad credentials?)`,
       );
     }
     return interpretRpcResponseBody(body, method);
