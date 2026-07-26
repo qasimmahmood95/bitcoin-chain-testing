@@ -71,7 +71,7 @@ describe('RG-03: conflicting spend conflicts the deposit for good', () => {
       return;
     }
 
-    // Build the conflicting spend of the deposit's first input.
+    // The conflicting spend targets the deposit's first input.
     const inputs = await node.getRawTransactionInputs(txid);
     const disputed = inputs[0];
     expect(disputed).toBeDefined();
@@ -87,15 +87,18 @@ describe('RG-03: conflicting spend conflicts the deposit for good', () => {
     if (disputedValue === undefined) {
       return;
     }
+
+    // Reorg the deposit back into the mempool FIRST: while the deposit is
+    // confirmed, the disputed coin is spent in the UTXO set and the wallet
+    // cannot sign a second spend of it (first live run caught this).
+    const preReorgTip = await node.getBestBlockHash();
+    await node.invalidateBlock(included.inclusion.blockHash);
+
     const unsignedConflict = await node.createRawTransaction([disputed], {
       [await signing.getNewAddress()]: satsToBtc(disputedValue - CONFLICT_FEE_SATS),
     });
     const conflict = await signing.signRawTransactionWithWallet(unsignedConflict);
     expect(conflict.complete).toBe(true);
-
-    // Reorg the deposit back into the mempool…
-    const preReorgTip = await node.getBestBlockHash();
-    await node.invalidateBlock(included.inclusion.blockHash);
 
     // [pin] …where the underpaying conflict cannot follow it in: full-RBF
     // evaluates it as a replacement and rejects it on fees.
