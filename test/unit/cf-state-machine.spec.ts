@@ -177,6 +177,30 @@ describe('confirmation state machine', () => {
     expect(reconnected.events).toEqual([]);
   });
 
+  it('a mempool re-sighting never downgrades a confirming or credited record', () => {
+    // The real watcher produces exactly this: a block-first transaction is
+    // resurrected into the mempool by a reorg and scanned BEFORE the
+    // chain walk disconnects its block.
+    const confirming = run(newTracker(), [connectAt(START_HEIGHT + 1, [DEPOSIT])]);
+    const resighted = run(confirming.state, [{ kind: 'mempool', deposit: DEPOSIT }]);
+    expect(recordOf(resighted.state)).toEqual(recordOf(confirming.state));
+
+    const credited = run(resighted.state, [...emptyConnects(START_HEIGHT + 2, N - 1)]);
+    expect(recordOf(credited.state).state).toBe('CREDITED');
+    const resightedCredited = run(credited.state, [{ kind: 'mempool', deposit: DEPOSIT }]);
+    expect(recordOf(resightedCredited.state)).toEqual(recordOf(credited.state));
+    expect(resightedCredited.events).toEqual([]);
+  });
+
+  it('credits at inclusion when N=1 — the parameter floor', () => {
+    const tracker = initialTrackerState(1, START_HEIGHT);
+    const result = run(tracker, [connectAt(START_HEIGHT + 1, [DEPOSIT])]);
+    expect(recordOf(result.state).state).toBe('CREDITED');
+    expect(result.events).toEqual([
+      { kind: 'credited', outpoint: DEPOSIT.outpoint, atHeight: START_HEIGHT + 1 },
+    ]);
+  });
+
   it('malformed sequences throw instead of corrupting accounting', () => {
     const base = newTracker();
     expect(() => applyChainEvent(base, connectAt(START_HEIGHT + 2))).toThrow(ChainEventError);
@@ -184,6 +208,16 @@ describe('confirmation state machine', () => {
       applyChainEvent(base, { kind: 'disconnect', height: START_HEIGHT - 1, blockHash: 'x' }),
     ).toThrow(ChainEventError);
     expect(() => initialTrackerState(0, START_HEIGHT)).toThrow(ChainEventError);
+
+    // Disconnect of the right height under the wrong hash is feed corruption.
+    const included = run(newTracker(), [connectAt(START_HEIGHT + 1, [DEPOSIT])]);
+    expect(() =>
+      applyChainEvent(included.state, {
+        kind: 'disconnect',
+        height: START_HEIGHT + 1,
+        blockHash: 'not-the-connected-hash',
+      }),
+    ).toThrow(ChainEventError);
   });
 
   it('rejects corrupted snapshots that decouple the credit latch', () => {

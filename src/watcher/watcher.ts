@@ -42,10 +42,15 @@ export interface WatcherCheckpoint {
   readonly seenMempoolTxids: readonly string[];
 }
 
-/** Deepest reorg a single poll will walk before failing loudly. */
-const MAX_WALK_DEPTH = 500;
 /** Processed-chain entries kept below the tip (bounds checkpoint size). */
 const PROCESSED_RETENTION = 200;
+/**
+ * Deepest reorg a single poll will walk before failing loudly — equal to
+ * the retention window on purpose: anything deeper could not be
+ * disconnected anyway, so the two bounds must agree on the watcher's
+ * supported depth.
+ */
+const MAX_WALK_DEPTH = PROCESSED_RETENTION;
 
 export class ChainWatcher {
   private trackerState: TrackerState;

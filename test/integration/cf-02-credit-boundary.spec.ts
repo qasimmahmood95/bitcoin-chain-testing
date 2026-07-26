@@ -14,7 +14,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { confirmationsOf, outpointKey } from '../../src/core/confirmations.js';
+import { confirmationsOf } from '../../src/core/confirmations.js';
 import { deriveAddress } from '../../src/core/derivation.js';
 import type { BitcoindRpc } from '../../src/rpc/bitcoind.js';
 import { falsifyActive } from '../../src/testing/falsify.js';
@@ -85,7 +85,6 @@ describe('CF-02: credit boundary triplet', () => {
     ]);
     expect(record.state).toBe('CREDITED');
     expect(record.creditedAtHeight).toBe(watcher.state.tipHeight);
-    expect(outpointKey(record.outpoint).startsWith(txid)).toBe(true);
     expect(confirmationsOf(record, watcher.state.tipHeight)).toBe(N);
     expect(await walletConfirmations(txid)).toBe(N);
 

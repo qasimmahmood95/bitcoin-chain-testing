@@ -295,6 +295,7 @@ export class BitcoindRpc {
     }
     return asString(
       await this.rpc.call('sendmany', {
+        dummy: '',
         amounts: decimalAmounts,
         fee_rate: feeRateSatPerVb,
       }),

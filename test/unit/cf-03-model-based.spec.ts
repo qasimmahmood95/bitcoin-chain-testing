@@ -116,7 +116,12 @@ function eventsFromOps(ops: readonly Op[]): ChainEvent[] {
           break;
         }
         events.push({ kind: 'disconnect', height: block.height, blockHash: block.hash });
-        mempool.push(...block.deposits);
+        for (const deposit of block.deposits) {
+          mempool.push(deposit);
+          // Resurrected transactions get re-sighted by a mempool scan; the
+          // machine must treat this as a no-op, never a downgrade.
+          events.push({ kind: 'mempool', deposit });
+        }
       }
       // Competing chain: depth+1 blocks, optionally re-including deposits.
       for (let i = 0; i <= depth; i += 1) {
@@ -148,70 +153,68 @@ interface OracleRecord {
   amountSats: bigint;
 }
 
+// Local on purpose: the oracle shares no helpers with the tracker.
+function oracleKey(outpoint: { txid: string; vout: number }): string {
+  return `${outpoint.txid}#${String(outpoint.vout)}`;
+}
+
 // FALSIFY=CF-03: the oracle's confirmation count drops the +1.
 function oracleConfirmations(tip: number, inclusionHeight: number): number {
   return tip - inclusionHeight + (falsifyActive('CF-03') ? 0 : 1);
 }
 
 /**
- * Naive full-history oracle: replays the entire event list from scratch,
- * recomputing every record against the running tip on every step — no
- * incremental bookkeeping shared with the real tracker.
+ * Full-history oracle, recomputed per outpoint: for each deposit the whole
+ * event list is scanned independently, tracking only that deposit's
+ * inclusion interval against the running tip. No shared record map, no
+ * state-kind bookkeeping — the state is *derived* at the end from the
+ * (inclusion, credited) pair, so a correlated misunderstanding of the
+ * credit pass cannot hide in mirrored structure.
  */
 function oracleRecords(events: readonly ChainEvent[]): Map<string, OracleRecord> {
-  const records = new Map<string, OracleRecord>();
-  let tip = START_HEIGHT;
+  const amounts = new Map<string, bigint>();
   for (const event of events) {
     if (event.kind === 'mempool') {
-      const key = outpointKey(event.deposit.outpoint);
-      if (!records.has(key)) {
-        records.set(key, {
-          state: 'SEEN_MEMPOOL',
-          inclusionHeight: null,
-          creditedAtHeight: null,
-          amountSats: event.deposit.amountSats,
-        });
-      }
+      amounts.set(oracleKey(event.deposit.outpoint), event.deposit.amountSats);
     } else if (event.kind === 'connect') {
-      tip = event.height;
       for (const deposit of event.deposits) {
-        const key = outpointKey(deposit.outpoint);
-        const existing = records.get(key) ?? {
-          state: 'CONFIRMING' as DepositStateKind,
-          inclusionHeight: null,
-          creditedAtHeight: null,
-          amountSats: deposit.amountSats,
-        };
-        if (existing.state !== 'CONFLICTED') {
-          existing.inclusionHeight = event.height;
-          if (existing.state !== 'CREDITED') {
-            existing.state = 'CONFIRMING';
-          }
-        }
-        records.set(key, existing);
-      }
-      for (const record of records.values()) {
-        if (
-          record.state === 'CONFIRMING' &&
-          record.creditedAtHeight === null &&
-          record.inclusionHeight !== null &&
-          oracleConfirmations(tip, record.inclusionHeight) >= N
-        ) {
-          record.state = 'CREDITED';
-          record.creditedAtHeight = tip;
-        }
-      }
-    } else if (event.kind === 'disconnect') {
-      tip = event.height - 1;
-      for (const record of records.values()) {
-        if (record.inclusionHeight === event.height) {
-          record.inclusionHeight = null;
-          if (record.state !== 'CREDITED') {
-            record.state = 'SEEN_MEMPOOL';
-          }
-        }
+        amounts.set(oracleKey(deposit.outpoint), deposit.amountSats);
       }
     }
+  }
+
+  const records = new Map<string, OracleRecord>();
+  for (const [key, amountSats] of amounts) {
+    let tip = START_HEIGHT;
+    let inclusionHeight: number | null = null;
+    let creditedAtHeight: number | null = null;
+    for (const event of events) {
+      if (event.kind === 'connect') {
+        if (event.deposits.some((d) => oracleKey(d.outpoint) === key)) {
+          inclusionHeight = event.height;
+        }
+        tip = event.height;
+        if (
+          creditedAtHeight === null &&
+          inclusionHeight !== null &&
+          oracleConfirmations(tip, inclusionHeight) >= N
+        ) {
+          creditedAtHeight = tip;
+        }
+      } else if (event.kind === 'disconnect') {
+        if (inclusionHeight === event.height) {
+          inclusionHeight = null;
+        }
+        tip = event.height - 1;
+      }
+    }
+    const state: DepositStateKind =
+      creditedAtHeight !== null
+        ? 'CREDITED'
+        : inclusionHeight !== null
+          ? 'CONFIRMING'
+          : 'SEEN_MEMPOOL';
+    records.set(key, { state, inclusionHeight, creditedAtHeight, amountSats });
   }
   return records;
 }
@@ -262,7 +265,7 @@ describe('CF-03: model-based equivalence with a full-history oracle', () => {
         const oracle = oracleRecords(events);
         expect(state.records.size).toBe(oracle.size);
         for (const [key, record] of state.records) {
-          const expected = oracle.get(key);
+          const expected = oracle.get(oracleKey(record.outpoint));
           expect(expected, key).toBeDefined();
           if (expected === undefined) {
             continue;
