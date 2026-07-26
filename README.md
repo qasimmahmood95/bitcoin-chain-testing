@@ -121,18 +121,21 @@ the evidence:
 
 | Branch | The plausible bug | What went red |
 |---|---|---|
-| [`defect/credit-at-one-conf`](https://github.com/qasimmahmood95/bitcoin-chain-testing/tree/defect/credit-at-one-conf) | "confirmed means confirmed" — credit fires on the first confirmation instead of at `N` | [run ↗](https://github.com/qasimmahmood95/bitcoin-chain-testing/actions/runs/30214559571) — 6 unit pins (boundary triplet, CF-03 oracle) **and** CF-02, RG-01, RG-02, RG-03, RG-05 |
-| [`defect/reorg-uncredit-missed`](https://github.com/qasimmahmood95/bitcoin-chain-testing/tree/defect/reorg-uncredit-missed) | disconnect bookkeeping skipped for deposits "nobody has been credited for" — pending state never reverts | [run ↗](https://github.com/qasimmahmood95/bitcoin-chain-testing/actions/runs/30214560145) — 2 unit pins **and** RG-01, RG-05 |
-| [`defect/rebroadcast-double-credit`](https://github.com/qasimmahmood95/bitcoin-chain-testing/tree/defect/rebroadcast-double-credit) | dedup keyed on the observation event instead of the outpoint — a re-sighting resets the record and clears the credit latch | [run ↗](https://github.com/qasimmahmood95/bitcoin-chain-testing/actions/runs/30214560931) — the unit re-sighting pin **and** RG-06 |
+| [`defect/credit-at-one-conf`](https://github.com/qasimmahmood95/bitcoin-chain-testing/tree/defect/credit-at-one-conf) | "confirmed means confirmed" — credit fires on the first confirmation instead of at `N` | [run ↗](https://github.com/qasimmahmood95/bitcoin-chain-testing/actions/runs/30215175034) — 6 unit pins (boundary triplet, CF-03 oracle) **and** CF-02, RG-01, RG-02, RG-03, RG-05 |
+| [`defect/reorg-uncredit-missed`](https://github.com/qasimmahmood95/bitcoin-chain-testing/tree/defect/reorg-uncredit-missed) | disconnect bookkeeping skipped for deposits "nobody has been credited for" — pending state never reverts | [run ↗](https://github.com/qasimmahmood95/bitcoin-chain-testing/actions/runs/30215175770) — 2 unit pins **and** RG-01, RG-05 |
+| [`defect/rebroadcast-double-credit`](https://github.com/qasimmahmood95/bitcoin-chain-testing/tree/defect/rebroadcast-double-credit) | dedup keyed on the observation event instead of the outpoint — a re-sighting resets the record and clears the credit latch | [run ↗](https://github.com/qasimmahmood95/bitcoin-chain-testing/actions/runs/30215176391) — the unit re-sighting pin, CF-03 **and** RG-06 |
 
-The third one is the interesting one. It was caught by a unit pin but by **no
-integration scenario**, because every existing spec polls while the deposit is
-still in the mempool — so the watcher's txid dedup meant the re-sighting path
-was never exercised against a live node. The planted defect found a hole in the
-suite. [RG-06](test/integration/rg-06-resurrected-resighting.spec.ts) closes it:
-a deposit first seen *on-chain*, reorged out, met again in the mempool, and
-mined past `N` a second time — credited exactly once. That scenario is why
-planting defects is worth the effort: it tests the tests.
+The third one is the interesting one. When it was first planted it was caught
+by a single unit pin and by **no integration scenario at all** — every existing
+spec polls while the deposit is still in the mempool, so the watcher's txid
+dedup meant the re-sighting path was never exercised against a live node. The
+planted defect had found a hole in the suite. Two tests now close it:
+[RG-06](test/integration/rg-06-resurrected-resighting.spec.ts), where a deposit
+first seen *on-chain* is reorged out, met again in the mempool, and mined past
+`N` a second time — credited exactly once; and CF-03, whose model-based
+generator now draws re-sightings from every deposit ever broadcast rather than
+only from ones a disconnect had just demoted. That is why planting defects is
+worth the effort: it tests the tests.
 
 Read the commit messages: each one argues for itself. *"A deposit that is
 in a block is confirmed."* *"A deposit still confirming has not been
