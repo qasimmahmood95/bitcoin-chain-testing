@@ -1,0 +1,13 @@
+#!/bin/sh
+# Required pre-commit gate (hard limit 2): no key material may enter
+# history. Enabled once per clone by `npm install` (the prepare script sets
+# core.hooksPath), or manually:  git config core.hooksPath .githooks
+set -e
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo 'pre-commit: gitleaks is required but not installed.' >&2
+  echo '  https://github.com/gitleaks/gitleaks#installing' >&2
+  exit 1
+fi
+
+exec gitleaks protect --staged --redact
