@@ -19,8 +19,8 @@ import { pollUntil, type PollBudget } from './poll.js';
  */
 export const COINBASE_MATURITY = 100;
 
-export function connectRegtest(): BitcoindRpc {
-  return new BitcoindRpc(new JsonRpcClient(regtestConnectionFromEnv()));
+export function connectRegtest(overrides?: { timeoutMs?: number }): BitcoindRpc {
+  return new BitcoindRpc(new JsonRpcClient({ ...regtestConnectionFromEnv(), ...overrides }));
 }
 
 const READY_BUDGET: PollBudget = { attempts: 30, delayMs: 1000 };

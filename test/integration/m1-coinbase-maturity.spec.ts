@@ -14,8 +14,10 @@
  * Custody risk: treating miner-funded deposits as spendable a block early —
  *   funds consensus can still take back — or refusing them a block late and
  *   stalling withdrawals. Both sides of the boundary are pinned.
- * Falsification lever: FALSIFY=MATURITY (harness lands M2) shifts the
- *   boundary indices by one; the depth-99 rejection goes red.
+ * Falsification lever: FALSIFY=MATURITY (harness lands M2) mines one extra
+ *   block before the asserts, shifting every depth up by one — the block
+ *   asserted as depth-99-rejected is then at depth 100, and the rejection
+ *   assertion goes red.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';

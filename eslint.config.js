@@ -52,8 +52,9 @@ export default tseslint.config(
           message: 'No float parsing — amounts are bigint satoshis (ADR-0004).',
         },
         {
-          // All fractional spellings: 1.5, .5, 5., 1.5e3, 1.E-3 …
-          selector: 'Literal[raw=/^[0-9]*\\.[0-9]*([eE][+-]?[0-9]+)?$/]',
+          // Fractional spellings (1.5, .5, 5., 1.5e3, 1.E-3) plus dotless
+          // negative-exponent forms (1e-3); integral 1e3 stays allowed.
+          selector: 'Literal[raw=/^[0-9]*\\.[0-9]*([eE][+-]?[0-9]+)?$|^[0-9]+[eE]-[0-9]+$/]',
           message: 'No fractional literals in library code — money is bigint satoshis (ADR-0004).',
         },
       ],
