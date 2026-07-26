@@ -118,7 +118,20 @@ plausible bug: the kind that survives code review because the reasoning
 sounds right. Their CI runs are red by design, and the failing runs are
 the evidence:
 
-<!-- EVIDENCE TABLE -->
+| Branch | The plausible bug | What went red |
+|---|---|---|
+| [`defect/credit-at-one-conf`](https://github.com/qasimmahmood95/bitcoin-chain-testing/tree/defect/credit-at-one-conf) | "confirmed means confirmed" — credit fires on the first confirmation instead of at `N` | [run ↗](https://github.com/qasimmahmood95/bitcoin-chain-testing/actions/runs/30214559571) — 6 unit pins (boundary triplet, CF-03 oracle) **and** CF-02, RG-01, RG-02, RG-03, RG-05 |
+| [`defect/reorg-uncredit-missed`](https://github.com/qasimmahmood95/bitcoin-chain-testing/tree/defect/reorg-uncredit-missed) | disconnect bookkeeping skipped for deposits "nobody has been credited for" — pending state never reverts | [run ↗](https://github.com/qasimmahmood95/bitcoin-chain-testing/actions/runs/30214560145) — 2 unit pins **and** RG-01, RG-05 |
+| [`defect/rebroadcast-double-credit`](https://github.com/qasimmahmood95/bitcoin-chain-testing/tree/defect/rebroadcast-double-credit) | dedup keyed on the observation event instead of the outpoint — a re-sighting resets the record and clears the credit latch | [run ↗](https://github.com/qasimmahmood95/bitcoin-chain-testing/actions/runs/30214560931) — the unit re-sighting pin **and** RG-06 |
+
+The third one is the interesting one. It was caught by a unit pin but by **no
+integration scenario**, because every existing spec polls while the deposit is
+still in the mempool — so the watcher's txid dedup meant the re-sighting path
+was never exercised against a live node. The planted defect found a hole in the
+suite. [RG-06](test/integration/rg-06-resurrected-resighting.spec.ts) closes it:
+a deposit first seen *on-chain*, reorged out, met again in the mempool, and
+mined past `N` a second time — credited exactly once. That scenario is why
+planting defects is worth the effort: it tests the tests.
 
 Read the commit messages: each one argues for itself. *"A deposit that is
 in a block is confirmed."* *"A deposit still confirming has not been

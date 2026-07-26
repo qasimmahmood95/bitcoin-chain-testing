@@ -124,11 +124,11 @@ rebroadcast volley twice from clean state.
 commit** containing one plausible bug, CI red by design, linked from the
 README:
 
-| Branch | The plausible bug | Caught by |
+| Branch | The plausible bug | Caught by (observed, not asserted) |
 |---|---|---|
-| `defect/credit-at-one-conf` | "confirmed means confirmed" — credits on first confirmation | CF-02 boundary triplet; **RG-01** then shows the credited money vanish in a reorg |
-| `defect/reorg-uncredit-missed` | block-disconnect events dropped for already-counted deposits — pending state never reverts | RG-01 / RG-02 |
-| `defect/rebroadcast-double-credit` | dedup keyed on the observation event instead of the outpoint | BR-01 / CF-04 |
+| `defect/credit-at-one-conf` | "confirmed means confirmed" — credits on first confirmation | 6 unit pins (boundary triplet, CF-03 oracle) + **CF-02, RG-01, RG-02, RG-03, RG-05** |
+| `defect/reorg-uncredit-missed` | block-disconnect bookkeeping skipped for deposits "never counted" — pending state never reverts | 2 unit pins (demotion, CF-03 oracle) + **RG-01, RG-05** |
+| `defect/rebroadcast-double-credit` | dedup keyed on the observation event instead of the outpoint | unit re-sighting pin + **RG-06** (added in M7: the defect exposed that no integration scenario exercised the re-sighting path) |
 
 Plus: final README in the sibling style (thesis, run-it-yourself, the
 headline reorg walk-through with real red-run output, scope & non-goals),
