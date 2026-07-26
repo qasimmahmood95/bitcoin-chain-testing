@@ -120,11 +120,8 @@ export function applyChainEvent(state: TrackerState, event: ChainEvent): Tracker
 
 function applyMempool(state: TrackerState, deposit: WatchedDeposit): TrackerTransition {
   const key = outpointKey(deposit.outpoint);
-  // Idempotent, and never a downgrade: a record already confirming,
-  // credited, or conflicted is not touched by a mempool sighting.
-  if (state.records.has(key)) {
-    return { state, events: [] };
-  }
+  // The watcher already dedups mempool sightings by txid before it feeds
+  // us, so a second check here is redundant work on every poll.
   const records = new Map(state.records);
   records.set(key, {
     outpoint: deposit.outpoint,
