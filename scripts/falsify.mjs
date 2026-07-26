@@ -141,6 +141,37 @@ const LEVERS = [
     spec: 'test/integration/rg-05-chain-flapping.spec.ts',
     sabotage: 'window replayed without checkpoint dedup',
   },
+  // ── M5 ───────────────────────────────────────────────────────────────
+  {
+    id: 'TX-01',
+    project: 'unit',
+    spec: 'test/unit/txbuild.spec.ts',
+    sabotage: 'one satoshi dropped into the observed fee',
+  },
+  {
+    id: 'FE-02',
+    project: 'unit',
+    spec: 'test/unit/feepolicy.spec.ts',
+    sabotage: 'ceiling clamp removed from the fixture config',
+  },
+  {
+    id: 'TX-02',
+    project: 'integration',
+    spec: 'test/integration/tx-02-selection-guards.spec.ts',
+    sabotage: 'in-flight reservation disabled',
+  },
+  {
+    id: 'TX-03',
+    project: 'integration',
+    spec: 'test/integration/tx-03-dust-and-feerate.spec.ts',
+    sabotage: 'dust threshold zeroed — sub-dust change emitted',
+  },
+  {
+    id: 'FE-01',
+    project: 'integration',
+    spec: 'test/integration/fe-01-estimator-fallback.spec.ts',
+    sabotage: 'estimator unavailability throws instead of falling back',
+  },
 ];
 
 const requested = process.argv.slice(2);
