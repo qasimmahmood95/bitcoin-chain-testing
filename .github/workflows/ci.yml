@@ -53,7 +53,7 @@ jobs:
     # Fail fast everywhere except the planted-defect branches (M7): there
     # the whole point is evidence of WHICH lanes catch the bug, so the
     # integration suite must run even after a unit pin has already gone
-    # red. `defect/*` is red by design either way.
+    # red. `defect/**` is red by design either way.
     # (`head_ref` covers a pull_request event, where `ref` is refs/pull/N/merge.)
     if: >-
       ${{ !cancelled() && (success()

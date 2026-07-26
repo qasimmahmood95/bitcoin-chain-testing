@@ -20,8 +20,10 @@
  *   bug, which the unit suite caught but no integration scenario did
  *   until this one.
  * Falsification lever: FALSIFY=RG-06 continues the run through a fresh
- *   watcher with no checkpoint — the credit latch is lost and the deposit
- *   credits a second time; the exactly-once assertion goes red.
+ *   watcher with no checkpoint, applied AFTER the post-reorg assertions so
+ *   the sabotage lands on the exactly-once pin itself: the credit latch is
+ *   lost, the re-mine credits the same deposit a second time, and the
+ *   single-credit assertion goes red.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -86,12 +88,6 @@ describe('RG-06: resurrected deposit re-sighted in the mempool', () => {
       await node.generateBlock(minerAddress, []);
     }
 
-    // FALSIFY=RG-06: the run continues through a watcher that lost its
-    // state — the credit latch goes with it.
-    if (falsifyActive('RG-06')) {
-      watcher = await ChainWatcher.create(node, new Set([address]), N);
-    }
-
     // This poll scans the mempool FIRST and meets this txid there for the
     // first time, on a record that already exists and is already credited.
     allEvents.push(...(await watcher.poll()));
@@ -99,7 +95,18 @@ describe('RG-06: resurrected deposit re-sighted in the mempool', () => {
     const afterReorg = [...watcher.state.records.values()].find((r) => r.outpoint.txid === txid);
     expect(afterReorg?.state).toBe('CREDITED'); // sticky: alert, never clawback
     expect(afterReorg?.creditedAtHeight).toBe(creditHeight);
-    expect(allEvents.filter((e) => e.kind === 'finality-violation').length).toBeGreaterThan(0);
+    expect(
+      allEvents.filter((e) => e.kind === 'finality-violation' && e.outpoint.txid === txid),
+    ).toHaveLength(1);
+
+    // FALSIFY=RG-06: the run continues through a watcher that lost its
+    // state — the credit latch goes with it, so the re-mine below credits
+    // the SAME deposit a second time. Placed here on purpose: sabotaging
+    // before the assertions above would abort the spec there and leave the
+    // exactly-once pin (the point of this scenario) unexercised.
+    if (falsifyActive('RG-06')) {
+      watcher = await ChainWatcher.create(node, new Set([address]), N);
+    }
 
     // Re-mine the deposit and take it past N a SECOND time.
     await mineToWallet(node, signing, N + 1);

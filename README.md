@@ -14,7 +14,8 @@ tests, so a reorg is not an event to wait for but a three-RPC-call fixture:
 repo drives the chain explicitly and asserts against a node that is
 genuinely mining, genuinely reorging, and genuinely rejecting.
 
-**22 integration scenarios · 53 unit tests · 31 falsification levers · 3
+**22 integration spec files (19 scenario IDs plus 3 node-behaviour
+characterization pins) · 53 unit tests · 31 falsification levers · 3
 planted defects with red CI.** Bitcoin Core enters only as a pinned Docker
 image ([`31.1@sha256:da25ce…`](docker-compose.yml)) and is never patched,
 forked, or mocked.
@@ -98,7 +99,7 @@ spec goes **red**:
 ```
 $ npm run falsify
 RG-01     RED (good)  · the reorg is suppressed — nothing to un-credit
-CF-02     RED (good)  · credit threshold lowered to N−1
+CF-02     RED (good)  · tracker finality depth lowered by one
 TX-03     RED (good)  · dust threshold zeroed — sub-dust change emitted
 BR-01     RED (good)  · a record annotation per broadcast attempt
 …
@@ -176,8 +177,10 @@ test/integration/  the scenario suite: DR · CF · RG · TX · FE · BR
 docs/adr/     decision records
 ```
 
-Scenario IDs by group (some are proven in the unit lane rather than
-against the node, so these do not sum to the 22 integration spec files):
+Scenario IDs by group. Four are proven in the unit lane rather than
+against the node (DR-01, DR-04, CF-03, FE-02), which is why 23 IDs map to
+19 integration specs — the other 3 integration files are the M1
+characterization pins, which carry no scenario ID:
 
 | Group | Scenarios | What it pins |
 |---|---|---|
