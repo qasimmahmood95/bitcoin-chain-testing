@@ -101,6 +101,8 @@ so a Core version bump that changes the contract fails loudly.
 src/core/     pure library — no I/O, no imports from src/rpc/
               derivation · confirmation state machine · tx builder · fee policy
 src/rpc/      thin typed JSON-RPC client for bitcoind (decimal→bigint at edge)
+src/watcher/  block-walking watcher: polls the node, feeds ordered chain
+              events to the pure state machine (imports core + rpc)
 src/testing/  fast-check arbitraries + fixtures (chain-event sequences)
 test/unit/    core against fixtures and properties — no Docker needed
 test/integration/  drives regtest via docker compose; scenario IDs DR/CF/RG/TX/FE/BR
