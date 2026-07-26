@@ -175,15 +175,11 @@ function applyConnect(
     }
   }
 
-  // Credit pass: everything included and mature at the new tip credits
+  // Credit pass: everything included in a block is confirmed, and credits
   // exactly once (creditedAtHeight latch).
   const events: TrackerEvent[] = [];
   for (const [key, record] of records) {
-    if (
-      record.state === 'CONFIRMING' &&
-      record.creditedAtHeight === null &&
-      confirmationsOf(record, height) >= state.finalityDepth
-    ) {
+    if (record.state === 'CONFIRMING' && record.creditedAtHeight === null) {
       records.set(key, { ...record, state: 'CREDITED', creditedAtHeight: height });
       events.push({ kind: 'credited', outpoint: record.outpoint, atHeight: height });
     }
