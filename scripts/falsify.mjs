@@ -172,6 +172,31 @@ const LEVERS = [
     spec: 'test/integration/fe-01-estimator-fallback.spec.ts',
     sabotage: 'estimator unavailability throws instead of falling back',
   },
+  // ── M6 ───────────────────────────────────────────────────────────────
+  {
+    id: 'BR-SM',
+    project: 'unit',
+    spec: 'test/unit/broadcast.spec.ts',
+    sabotage: 'per-attempt mutation slipped into the retried record',
+  },
+  {
+    id: 'BR-01',
+    project: 'integration',
+    spec: 'test/integration/br-01-rebroadcast-idempotent.spec.ts',
+    sabotage: 'a record annotation per broadcast attempt',
+  },
+  {
+    id: 'BR-02',
+    project: 'integration',
+    spec: 'test/integration/br-02-rebroadcast-after-mine.spec.ts',
+    sabotage: 'already-mined treated as a fresh failure',
+  },
+  {
+    id: 'BR-03',
+    project: 'integration',
+    spec: 'test/integration/br-03-conflicting-broadcast.spec.ts',
+    sabotage: 'conflict rejection swallowed — record stays in-flight',
+  },
 ];
 
 const requested = process.argv.slice(2);
